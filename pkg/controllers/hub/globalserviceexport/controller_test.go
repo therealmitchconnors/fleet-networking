@@ -1,0 +1,41 @@
+// Copyright Istio Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package globalserviceexport
+
+import (
+	"context"
+	"fmt"
+
+	azfake "github.com/Azure/azure-sdk-for-go/sdk/azcore/fake"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources/fake"
+	"istio.io/istio/pkg/kube"
+)
+
+func testSetup() {
+	client := kube.NewFakeClient()
+	deploymentServer := fake.DeploymentsServer{
+		BeginCreateOrUpdate: func(ctx context.Context, resourceGroupName string, deploymentName string, parameters armresources.Deployment, options *armresources.DeploymentsClientBeginCreateOrUpdateOptions) (resp azfake.PollerResponder[armresources.DeploymentsClientCreateOrUpdateResponse], errResp fake.ErrorResponder) {
+			// resp.SetTerminalResponse(200)
+			return
+		},
+	}
+	resourceServer := fake.Server{
+		GetByID: func(ctx context.Context, resourceID string, apiVersion string, options *armresources.ClientGetByIDOptions) (resp azfake.Responder[armresources.ClientGetByIDResponse], errResp azfake.ErrorResponder) {
+			return
+		},
+	}
+	fmt.Sprintf("%v", []any{client, deploymentServer, resourceServer})
+}

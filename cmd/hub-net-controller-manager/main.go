@@ -15,7 +15,9 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/trafficmanager/armtrafficmanager"
+	"istio.io/istio/pkg/kube"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -40,6 +42,7 @@ import (
 	fleetnetv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	fleetnetv1beta1 "go.goms.io/fleet-networking/api/v1beta1"
 	"go.goms.io/fleet-networking/pkg/controllers/hub/endpointsliceexport"
+	"go.goms.io/fleet-networking/pkg/controllers/hub/globalserviceexport"
 	"go.goms.io/fleet-networking/pkg/controllers/hub/internalserviceexport"
 	"go.goms.io/fleet-networking/pkg/controllers/hub/internalserviceimport"
 	"go.goms.io/fleet-networking/pkg/controllers/hub/membercluster"
@@ -158,6 +161,26 @@ func main() {
 		exitWithErrorFunc()
 	}
 
+	klog.V(1).InfoS("Start to setup GlobalService controller")
+	clientCfg := kube.NewClientConfigForRestConfig(mgr.GetConfig())
+	client, err := kube.NewClient(clientCfg, "")
+	if err != nil {
+		klog.ErrorS(err, "Unable to create GlobalService krt client")
+		exitWithErrorFunc()
+	}
+	kube.EnableCrdWatcher(client)
+	cloudConfig, err := azure.NewCloudConfigFromFile(*cloudConfigFile)
+	if err != nil {
+		klog.ErrorS(err, "Unable to load cloud config", "file name", *cloudConfigFile)
+		exitWithErrorFunc()
+	}
+	rc, dc, err := initAzureGlobalClients(cloudConfig)
+	if err != nil {
+		klog.ErrorS(err, "Unable to load global clients")
+		exitWithErrorFunc()
+	}
+	globalserviceexport.NewReconciler(client, dc, rc, cloudConfig.ResourceGroup)
+
 	klog.V(1).InfoS("Start to setup InternalServiceImport controller")
 	if err := (&internalserviceimport.Reconciler{
 		HubClient: mgr.GetClient(),
@@ -274,4 +297,36 @@ func initAzureTrafficManagerClients(cloudConfig *azure.CloudConfig) (*armtraffic
 		return nil, nil, fmt.Errorf("failed to create Azure trafficManager endpoints client: %w", err)
 	}
 	return profilesClient, endpointsClient, nil
+}
+
+// initAzureTrafficManagerClients initializes the Azure Traffic Manager profiles and endpoints clients.
+func initAzureGlobalClients(cloudConfig *azure.CloudConfig) (*armresources.Client, *armresources.DeploymentsClient, error) {
+	authProvider, err := azclient.NewAuthProvider(&cloudConfig.ARMClientConfig, &cloudConfig.AzureAuthConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create Azure auth provider: %w", err)
+	}
+
+	factoryConfig := &azclient.ClientFactoryConfig{
+		CloudProviderBackoff: true,
+		SubscriptionID:       cloudConfig.SubscriptionID,
+	}
+	options, err := azclient.GetDefaultResourceClientOption(&cloudConfig.ARMClientConfig, factoryConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get default resource client option: %w", err)
+	}
+
+	if rateLimitPolicy := ratelimit.NewRateLimitPolicy(cloudConfig.Config); rateLimitPolicy != nil {
+		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
+	}
+
+	resourceClient, err := armresources.NewClient(cloudConfig.SubscriptionID, authProvider.GetAzIdentity(), options)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create Azure resource client: %w", err)
+	}
+
+	deploymentClient, err := armresources.NewDeploymentsClient(cloudConfig.SubscriptionID, authProvider.GetAzIdentity(), options)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create Azure deploymentss client: %w", err)
+	}
+	return resourceClient, deploymentClient, nil
 }
