@@ -8,6 +8,7 @@ Licensed under the MIT license.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -15,13 +16,17 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/trafficmanager/armtrafficmanager"
+	"istio.io/istio/pkg/config/schema/kubeclient"
 	"istio.io/istio/pkg/kube"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/rand"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -29,6 +34,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -39,7 +45,9 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/cloudconfig/azure"
 
+	"go.goms.io/fleet-networking/api/v1alpha1"
 	fleetnetv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+	"go.goms.io/fleet-networking/api/v1beta1"
 	fleetnetv1beta1 "go.goms.io/fleet-networking/api/v1beta1"
 	"go.goms.io/fleet-networking/pkg/controllers/hub/endpointsliceexport"
 	"go.goms.io/fleet-networking/pkg/controllers/hub/globalserviceexport"
@@ -164,10 +172,12 @@ func main() {
 	klog.V(1).InfoS("Start to setup GlobalService controller")
 	clientCfg := kube.NewClientConfigForRestConfig(mgr.GetConfig())
 	client, err := kube.NewClient(clientCfg, "")
+
 	if err != nil {
 		klog.ErrorS(err, "Unable to create GlobalService krt client")
 		exitWithErrorFunc()
 	}
+	registerTypes(client, mgr.GetClient())
 	kube.EnableCrdWatcher(client)
 	cloudConfig, err := azure.NewCloudConfigFromFile(*cloudConfigFile)
 	if err != nil {
@@ -179,7 +189,8 @@ func main() {
 		klog.ErrorS(err, "Unable to load global clients")
 		exitWithErrorFunc()
 	}
-	globalserviceexport.NewReconciler(client, dc, rc, cloudConfig.ResourceGroup)
+	r := globalserviceexport.NewReconciler(client, dc, rc, cloudConfig.ResourceGroup)
+	mgr.Add(r)
 
 	klog.V(1).InfoS("Start to setup InternalServiceImport controller")
 	if err := (&internalserviceimport.Reconciler{
@@ -267,6 +278,67 @@ func main() {
 	}
 }
 
+func structureWatcher(watcher watch.Interface, objType runtime.Object) watch.Interface {
+	outChan := make(chan watch.Event)
+	result := watch.NewProxyWatcher(outChan)
+	go func() {
+		defer close(outChan)
+		for event := range watcher.ResultChan() {
+			if event.Type != watch.Error {
+				newObj := objType.DeepCopyObject()
+				runtime.DefaultUnstructuredConverter.FromUnstructured(event.Object.(runtime.Unstructured).UnstructuredContent(), newObj)
+				event.Object = newObj
+			}
+			outChan <- event
+		}
+	}()
+	return result
+}
+
+func registerTypes(kclient kube.Client, cc client.Client) {
+	gvrSE := v1beta1.GroupVersion.WithResource("serviceexports")
+	kubeclient.Register[*fleetnetv1beta1.ServiceExport](
+		gvrSE,
+		v1beta1.GroupVersion.WithKind("ServiceExport"),
+		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (runtime.Object, error) {
+			out := &fleetnetv1beta1.ServiceExportList{}
+			err := cc.List(context.Background(), out, client.InNamespace(namespace))
+			if out.Continue == "continue-not-supported" {
+				out.Continue = ""
+			}
+			return out, err
+		},
+		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (watch.Interface, error) {
+			i, err := kclient.Dynamic().Resource(gvrSE).Namespace(namespace).Watch(context.Background(), o)
+			if err != nil {
+				return nil, err
+			}
+			newObj := &fleetnetv1beta1.ServiceExport{}
+			return structureWatcher(i, newObj), nil
+		})
+	gvrISE := v1alpha1.GroupVersion.WithResource("internalserviceexports")
+	kubeclient.Register[*fleetnetv1alpha1.InternalServiceExport](
+		gvrISE,
+		v1beta1.GroupVersion.WithKind("InternalServiceExport"),
+		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (runtime.Object, error) {
+			out := &fleetnetv1alpha1.InternalServiceExportList{}
+			err := cc.List(context.Background(), out, client.InNamespace(namespace))
+			if out.Continue == "continue-not-supported" {
+				out.Continue = ""
+			}
+			return out, err
+			// return kclient.Dynamic().Resource(gvrISE).Namespace(namespace).List(context.Background(), o)
+		},
+		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (watch.Interface, error) {
+			i, err := kclient.Dynamic().Resource(gvrISE).Namespace(namespace).Watch(context.Background(), o)
+			if err != nil {
+				return nil, err
+			}
+			newObj := &fleetnetv1alpha1.InternalServiceExport{}
+			return structureWatcher(i, newObj), nil
+		})
+}
+
 // initAzureTrafficManagerClients initializes the Azure Traffic Manager profiles and endpoints clients.
 func initAzureTrafficManagerClients(cloudConfig *azure.CloudConfig) (*armtrafficmanager.ProfilesClient, *armtrafficmanager.EndpointsClient, error) {
 	authProvider, err := azclient.NewAuthProvider(&cloudConfig.ARMClientConfig, &cloudConfig.AzureAuthConfig)
@@ -301,9 +373,15 @@ func initAzureTrafficManagerClients(cloudConfig *azure.CloudConfig) (*armtraffic
 
 // initAzureTrafficManagerClients initializes the Azure Traffic Manager profiles and endpoints clients.
 func initAzureGlobalClients(cloudConfig *azure.CloudConfig) (*armresources.Client, *armresources.DeploymentsClient, error) {
-	authProvider, err := azclient.NewAuthProvider(&cloudConfig.ARMClientConfig, &cloudConfig.AzureAuthConfig)
+	// TODO: this is needed to run in production, I think.  Not sure how to build multi-env auth...
+	// authProvider, err := azclient.NewAuthProvider(&cloudConfig.ARMClientConfig, &cloudConfig.AzureAuthConfig)
+	// if err != nil {
+	// 	return nil, nil, fmt.Errorf("failed to create Azure auth provider: %w", err)
+	// }
+
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create Azure auth provider: %w", err)
+		return nil, nil, fmt.Errorf("failed to create Azure default credential: %w", err)
 	}
 
 	factoryConfig := &azclient.ClientFactoryConfig{
@@ -319,12 +397,12 @@ func initAzureGlobalClients(cloudConfig *azure.CloudConfig) (*armresources.Clien
 		options.ClientOptions.PerCallPolicies = append(options.ClientOptions.PerCallPolicies, rateLimitPolicy)
 	}
 
-	resourceClient, err := armresources.NewClient(cloudConfig.SubscriptionID, authProvider.GetAzIdentity(), options)
+	resourceClient, err := armresources.NewClient(cloudConfig.SubscriptionID, cred, options)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Azure resource client: %w", err)
 	}
 
-	deploymentClient, err := armresources.NewDeploymentsClient(cloudConfig.SubscriptionID, authProvider.GetAzIdentity(), options)
+	deploymentClient, err := armresources.NewDeploymentsClient(cloudConfig.SubscriptionID, cred, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Azure deploymentss client: %w", err)
 	}

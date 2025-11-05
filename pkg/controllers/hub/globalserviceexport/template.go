@@ -14,85 +14,126 @@
 
 package globalserviceexport
 
-var template = `
-param name string = 'foo'
-param backends array = []
-
-var loadBalancers_mitchs_global_lb_name = '${name}-global-lb'
-var publicIPAddresses_mitchs_global_ip_name = '${name}-global-ip'
-
-var backendObjs = [for backend in backends: {
-  name: last(split(backend, '/'))
-  properties: {
-    loadBalancerFrontendIPConfiguration: {
-      id: backend
+var templateInline = `{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.38.33.27573",
+      "templateHash": "16882031058036640307"
     }
-  }
-}]
-
-resource publicIPAddresses_mitchs_global_ip_name_resource 'Microsoft.Network/publicIPAddresses@2024-07-01' = {
-  name: publicIPAddresses_mitchs_global_ip_name
-  location: 'eastus2'
-  sku: {
-    name: 'Standard'
-    tier: 'Global'
-  }
-  properties: {
-    publicIPAddressVersion: 'IPv4'
-    publicIPAllocationMethod: 'Static'
-  }
-}
-
-resource loadBalancers_mitchs_global_lb_name_resource 'Microsoft.Network/loadBalancers@2024-07-01' = {
-  name: loadBalancers_mitchs_global_lb_name
-  location: 'eastus2'
-  sku: {
-    name: 'Standard'
-    tier: 'Global'
-  }
-  properties: {
-    frontendIPConfigurations: [
+  },
+  "parameters": {
+    "name": {
+      "type": "string",
+      "defaultValue": "foo"
+    },
+    "backends": {
+      "type": "array",
+      "defaultValue": []
+    }
+  },
+  "variables": {
+    "copy": [
       {
-        name: 'mitchs-global-ip-config'
-        properties: {
-          publicIPAddress: {
-            id: publicIPAddresses_mitchs_global_ip_name_resource.id
-          }
-        }
-      }
-    ]
-    backendAddressPools: [
-      {
-        name: 'kubernetes-mc'
-      }
-    ]
-    loadBalancingRules: [
-      {
-        name: 'tcp-80-k8s2'
-        properties: {
-          frontendIPConfiguration: {
-            id: resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', loadBalancers_mitchs_global_lb_name, 'mitchs-global-ip-config')
-          }
-          frontendPort: 80
-          backendPort: 80
-          enableFloatingIP: true
-          idleTimeoutInMinutes: 4
-          protocol: 'Tcp'
-          backendAddressPools: [
-            {
-              id: resourceId('Microsoft.Network/loadBalancers/backendAddressPools', loadBalancers_mitchs_global_lb_name, 'kubernetes-mc')
+        "name": "backendObjs",
+        "count": "[length(parameters('backends'))]",
+        "input": {
+          "name": "[last(split(parameters('backends')[copyIndex('backendObjs')], '/'))]",
+          "properties": {
+            "loadBalancerFrontendIPConfiguration": {
+              "id": "[parameters('backends')[copyIndex('backendObjs')]]"
             }
-          ]
+          }
         }
       }
-    ]
-  }
-
-  resource mybp 'backendAddressPools@2024-07-01' = {
-    name: 'kubernetes-mc'
-      properties: {
-        loadBalancerBackendAddresses: backendObjs
+    ],
+    "loadBalancers_mitchs_global_lb_name": "[format('{0}-global-lb', parameters('name'))]",
+    "publicIPAddresses_mitchs_global_ip_name": "[format('{0}-global-ip', parameters('name'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/loadBalancers/backendAddressPools",
+      "apiVersion": "2024-07-01",
+      "name": "[format('{0}/{1}', variables('loadBalancers_mitchs_global_lb_name'), 'kubernetes-mc')]",
+      "properties": {
+        "loadBalancerBackendAddresses": "[variables('backendObjs')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/loadBalancers', variables('loadBalancers_mitchs_global_lb_name'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2024-07-01",
+      "name": "[variables('publicIPAddresses_mitchs_global_ip_name')]",
+      "location": "eastus2",
+      "sku": {
+        "name": "Standard",
+        "tier": "Global"
+      },
+      "properties": {
+        "publicIPAddressVersion": "IPv4",
+        "publicIPAllocationMethod": "Static"
       }
+    },
+    {
+      "type": "Microsoft.Network/loadBalancers",
+      "apiVersion": "2024-07-01",
+      "name": "[variables('loadBalancers_mitchs_global_lb_name')]",
+      "location": "eastus2",
+      "sku": {
+        "name": "Standard",
+        "tier": "Global"
+      },
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "mitchs-global-ip-config",
+            "properties": {
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddresses_mitchs_global_ip_name'))]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "kubernetes-mc"
+          }
+        ],
+        "loadBalancingRules": [
+          {
+            "name": "tcp-80-k8s2",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', variables('loadBalancers_mitchs_global_lb_name'), 'mitchs-global-ip-config')]"
+              },
+              "frontendPort": 80,
+              "backendPort": 80,
+              "enableFloatingIP": true,
+              "idleTimeoutInMinutes": 4,
+              "protocol": "Tcp",
+              "backendAddressPools": [
+                {
+                  "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', variables('loadBalancers_mitchs_global_lb_name'), 'kubernetes-mc')]"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddresses_mitchs_global_ip_name'))]"
+      ]
     }
+  ],
+  "outputs": {
+    "publicGlobalIPAddress": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddresses_mitchs_global_ip_name'))).ipAddress]"
+    }
+  }
 }
 `

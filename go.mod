@@ -64,10 +64,12 @@ require (
 	istio.io/api v1.26.0-alpha.0.0.20250915143245-d7d5828bd661 // indirect
 	istio.io/client-go v1.26.0-alpha.0.0.20250915143641-ab215523e250 // indirect
 	k8s.io/apiserver v0.33.4 // indirect
+	k8s.io/metrics v0.25.2 // indirect
 	sigs.k8s.io/gateway-api v1.3.0 // indirect
 	sigs.k8s.io/gateway-api-inference-extension v1.0.0 // indirect
 	sigs.k8s.io/mcs-api v0.2.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
+	sigs.k8s.io/work-api v0.0.0-20220407021756-586d707fdb2c // indirect
 )
 
 require (
@@ -161,14 +163,12 @@ require (
 	k8s.io/client-go v0.33.4
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
-	k8s.io/metrics v0.25.2 // indirect
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	sigs.k8s.io/cloud-provider-azure v1.28.2 // indirect
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.50
 	sigs.k8s.io/controller-runtime v0.21.0
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
-	sigs.k8s.io/work-api v0.0.0-20220407021756-586d707fdb2c // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 

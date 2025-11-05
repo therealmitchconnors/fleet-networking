@@ -14,28 +14,18 @@
 
 package globalserviceexport
 
-import (
-	"context"
-	"fmt"
-
-	azfake "github.com/Azure/azure-sdk-for-go/sdk/azcore/fake"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources/fake"
-	"istio.io/istio/pkg/kube"
-)
-
 func testSetup() {
-	client := kube.NewFakeClient()
-	deploymentServer := fake.DeploymentsServer{
-		BeginCreateOrUpdate: func(ctx context.Context, resourceGroupName string, deploymentName string, parameters armresources.Deployment, options *armresources.DeploymentsClientBeginCreateOrUpdateOptions) (resp azfake.PollerResponder[armresources.DeploymentsClientCreateOrUpdateResponse], errResp fake.ErrorResponder) {
-			// resp.SetTerminalResponse(200)
-			return
-		},
-	}
-	resourceServer := fake.Server{
-		GetByID: func(ctx context.Context, resourceID string, apiVersion string, options *armresources.ClientGetByIDOptions) (resp azfake.Responder[armresources.ClientGetByIDResponse], errResp azfake.ErrorResponder) {
-			return
-		},
-	}
-	fmt.Sprintf("%v", []any{client, deploymentServer, resourceServer})
+	// client := kube.NewFakeClient()
+	// deploymentServer := fake.DeploymentsServer{
+	// 	BeginCreateOrUpdate: func(ctx context.Context, resourceGroupName string, deploymentName string, parameters armresources.Deployment, options *armresources.DeploymentsClientBeginCreateOrUpdateOptions) (resp azfake.PollerResponder[armresources.DeploymentsClientCreateOrUpdateResponse], errResp fake.ErrorResponder) {
+	// 		// resp.SetTerminalResponse(200)
+	// 		return
+	// 	},
+	// }
+	// resourceServer := fake.Server{
+	// 	GetByID: func(ctx context.Context, resourceID string, apiVersion string, options *armresources.ClientGetByIDOptions) (resp azfake.Responder[armresources.ClientGetByIDResponse], errResp azfake.ErrorResponder) {
+	// 		return
+	// 	},
+	// }
+	// fmt.Sprintf("%v", []any{client, deploymentServer, resourceServer})
 }

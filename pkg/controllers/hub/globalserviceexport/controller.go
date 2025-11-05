@@ -16,66 +16,85 @@ package globalserviceexport
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log"
 	"strings"
 
-	"go.goms.io/fleet-networking/pkg/common/krtutil"
-
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 
 	"go.goms.io/fleet-networking/api/v1alpha1"
 	"go.goms.io/fleet-networking/api/v1beta1"
+	"go.goms.io/fleet-networking/pkg/common/krtutil"
 	"go.goms.io/fleet-networking/pkg/common/objectmeta"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/kube/kubetypes"
 	"istio.io/istio/pkg/ptr"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 )
 
 const globalAnnotation = "globalLBName"
+const targetGatewayAnnotation = "targetGateway"
 
 type parameters struct {
-	name     string
-	rg       string
-	backends []string
+	name          string
+	rg            string
+	backends      []string
+	targetGateway string
+	serviceName   string
+	namespace     string
 }
 
+// ResourceName implements krt.ResourceNamer.
+func (p parameters) ResourceName() string {
+	return fmt.Sprintf("%s.%s", p.rg, p.name)
+}
+
+type output struct {
+	publicGlobalIPAddress string
+	targetGateway         string
+	serviceName           string
+	namespace             string
+}
+
+func (p output) ResourceName() string {
+	return fmt.Sprintf("%s.%s", p.namespace, p.serviceName)
+}
+
+var _ krt.ResourceNamer = parameters{}
+var _ krt.ResourceNamer = output{}
+
 type Reconciler struct {
-	client  kube.Client
-	exports krt.Collection[*v1beta1.ServiceExport]
-	// cww     client.WithWatch
+	client kube.Client
 
 	resourceGroupName string // default resource group name to create public IP address
-	// LBClient          loadbalancerclient.Interface
-	deploymentClient *armresources.DeploymentsClient
-	resourceClient   *armresources.Client
+	deploymentClient  *armresources.DeploymentsClient
+	resourceClient    *armresources.Client
 }
 
 func NewReconciler(c kube.Client, dc *armresources.DeploymentsClient, rc *armresources.Client, defaultRG string) *Reconciler {
-	filter := kclient.Filter{}
-
-	seInf := kclient.NewDelayedInformer[*v1beta1.ServiceExport](c, v1beta1.GroupVersion.WithResource("ServiceExport"), kubetypes.StandardInformer, filter)
-	iseInf := kclient.NewDelayedInformer[*v1alpha1.InternalServiceExport](c, v1beta1.GroupVersion.WithResource("InternalServiceExport"), kubetypes.StandardInformer, filter)
 	ob := krtutil.NewKrtOptions(make(chan struct{}), new(krt.DebugHandler))
 
-	ses := krt.WrapClient(seInf, ob.ToOptions("serviceexports")...)
-	ises := krt.WrapClient(iseInf, ob.ToOptions("internalserviceexports")...)
+	ses := krt.WrapClient(kclient.New[*v1beta1.ServiceExport](c), ob.ToOptions("serviceexports")...)
+	ises := krt.WrapClient(kclient.New[*v1alpha1.InternalServiceExport](c), ob.ToOptions("internalserviceexports")...)
 	s, _ := v1beta1.SchemeBuilder.Build()
 	v1alpha1.SchemeBuilder.AddToScheme(s)
 	r := &Reconciler{
 		client:            c,
-		exports:           ses,
 		resourceClient:    rc,
 		deploymentClient:  dc,
 		resourceGroupName: defaultRG,
 	}
 
-	iseIndex := krt.NewIndex(ises, "internal service export by service reference name", func(export *v1alpha1.InternalServiceExport) []krt.Named {
-		return []krt.Named{{
-			Name:      export.Spec.ServiceReference.Name,
-			Namespace: export.Spec.ServiceReference.Namespace,
+	iseIndex := krt.NewIndex(ises, "internal service export by service reference name", func(export *v1alpha1.InternalServiceExport) []NameKey {
+		return []NameKey{{
+			Named: krt.Named{
+				Name:      export.Spec.ServiceReference.Name,
+				Namespace: export.Spec.ServiceReference.Namespace,
+			},
 		}}
 	})
 
@@ -84,32 +103,60 @@ func NewReconciler(c kube.Client, dc *armresources.DeploymentsClient, rc *armres
 		if !ok {
 			return nil
 		}
-		internalServiceExports := krt.Fetch(kctx, ises, krt.FilterIndex(iseIndex, krt.NewNamed(export)))
+		targetGateway := export.Annotations[targetGatewayAnnotation]
+		internalServiceExports := krt.Fetch(kctx, ises, krt.FilterIndex(iseIndex, NewNameKey(export)))
 		rg := strings.TrimSpace(export.Annotations[objectmeta.ServiceAnnotationLoadBalancerResourceGroup])
 		if len(rg) < 1 {
 			rg = r.resourceGroupName
 		}
 		out := &parameters{
-			name: name,
-			rg:   rg,
+			name:          name,
+			rg:            rg,
+			targetGateway: targetGateway,
+			serviceName:   export.Name,
+			namespace:     export.Namespace,
 		}
 		for _, ise := range internalServiceExports {
 			// for each public ip, get frontend config id
-			pip, err := r.resourceClient.GetByID(context.Background(), *ise.Spec.PublicIPResourceID, "", &armresources.ClientGetByIDOptions{})
+			pip, err := r.resourceClient.GetByID(context.Background(), *ise.Spec.PublicIPResourceID, "2024-10-01", &armresources.ClientGetByIDOptions{})
 			if err != nil {
 				klog.ErrorS(err, "No Public IP found for InternalServiceExport", "name", ise.Spec.ServiceReference.NamespacedName)
 				kctx.DiscardResult()
 				return nil
 			}
-			props := pip.Properties.(armnetwork.PublicIPAddressPropertiesFormat)
-			out.backends = append(out.backends, ptr.OrEmpty(props.IPConfiguration.ID))
+
+			ipConfig := pip.Properties.(map[string]interface{})["ipConfiguration"].(map[string]interface{})
+			cfgID, _ := ipConfig["id"].(string)
+			out.backends = append(out.backends, cfgID)
 		}
 		return out
 	})
-	krt.NewCollection(params, func(kctx krt.HandlerContext, param parameters) *string {
-		err := r.writeDeployment(param)
+	outputs := krt.NewCollection(params, func(kctx krt.HandlerContext, param parameters) *output {
+		ipAddress, err := r.writeDeployment(param)
 		if err != nil {
 			klog.ErrorS(err, "Failed to deploy global service", "name", param.name)
+			kctx.DiscardResult()
+		}
+		return &output{
+			publicGlobalIPAddress: ipAddress,
+			targetGateway:         param.targetGateway,
+			serviceName:           param.serviceName,
+			namespace:             param.namespace,
+		}
+	})
+	krt.NewCollection(outputs, func(kctx krt.HandlerContext, out output) *string {
+		// annotate the service or gw with the global ip
+		patchStr := fmt.Sprintf(`{"metadata":{"annotations":{"service.beta.kubernetes.io/azure-additional-public-ips": %q}}}`, out.publicGlobalIPAddress)
+		var err error
+		if out.targetGateway == "" {
+			_, err = r.client.Kube().CoreV1().Services(out.namespace).Patch(context.Background(), out.serviceName, types.MergePatchType,
+				[]byte(patchStr), v1.PatchOptions{})
+		} else {
+			_, err = r.client.GatewayAPI().GatewayV1beta1().Gateways(out.namespace).Patch(context.Background(), out.targetGateway, types.MergePatchType,
+				[]byte(patchStr), v1.PatchOptions{})
+		}
+		if err != nil {
+			klog.ErrorS(err, "Failed to annotate target", "name", out.serviceName, "gateway", out.targetGateway, "error", err)
 			kctx.DiscardResult()
 		}
 		return nil
@@ -117,83 +164,44 @@ func NewReconciler(c kube.Client, dc *armresources.DeploymentsClient, rc *armres
 	return r
 }
 
-func (r *Reconciler) writeDeployment(params parameters) error {
+func (r *Reconciler) Start(ctx context.Context) error {
+	r.client.RunAndWait(ctx.Done())
+	return nil
+}
+
+func (r *Reconciler) writeDeployment(params parameters) (string, error) {
+	template := make(map[string]interface{})
+	if err := json.Unmarshal([]byte(templateInline), &template); err != nil {
+		return "", err
+	}
 	p, err := r.deploymentClient.BeginCreateOrUpdate(context.Background(), params.rg, params.name, armresources.Deployment{
 		Properties: &armresources.DeploymentProperties{
 			Template:   template,
 			Parameters: params,
+			Mode:       ptr.Of(armresources.DeploymentModeIncremental),
 		},
 	}, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
-	_, err = p.PollUntilDone(context.Background(), nil)
-	return err
+	res, err := p.PollUntilDone(context.Background(), nil)
+	log.Default().Println("Deployment result: ", res)
+	outputs := res.DeploymentExtended.Properties.Outputs.(map[string]interface{})
+	ipAddress := outputs["publicGlobalIPAddress"].(map[string]interface{})["value"].(string)
+	return ipAddress, err
 }
 
-// func buildGlobalLB(params parameters) *armnetwork.LoadBalancer {
+// This is boilerplate we'd like to get rid of.
+type NameKey struct {
+	krt.Named
+}
 
-// 	fip := &armnetwork.FrontendIPConfiguration{
-// 		Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
-// 			PublicIPAddress: &armnetwork.PublicIPAddress{
-// 				SKU: &armnetwork.PublicIPAddressSKU{
-// 					Name: ptr.Of(armnetwork.PublicIPAddressSKUNameStandard),
-// 					Tier: ptr.Of(armnetwork.PublicIPAddressSKUTierGlobal),
-// 				},
-// 			},
-// 		},
-// 	}
+func (n NameKey) String() string {
+	return fmt.Sprintf("%s/%s", n.Namespace, n.Name)
+}
 
-// 	bp := &armnetwork.BackendAddressPool{
-// 		Name: ptr.Of(params.name),
-// 		Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
-
-// 		},
-// 	}
-// 	for _, id := range params.ids {
-// 		bp.Properties.LoadBalancerBackendAddresses = append(bp.Properties.LoadBalancerBackendAddresses, &armnetwork.LoadBalancerBackendAddress{
-// 			Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
-// 				LoadBalancerFrontendIPConfiguration: &armnetwork.SubResource{
-// 					ID: ptr.Of(id),
-// 				},
-// 			},
-// 		})
-// 	}
-
-// 	out := &armnetwork.LoadBalancer{
-// 		SKU: &armnetwork.LoadBalancerSKU{
-// 			Name: ptr.Of(armnetwork.LoadBalancerSKUNameStandard),
-// 			Tier: ptr.Of(armnetwork.LoadBalancerSKUTierGlobal),
-// 		},
-// 		Properties: &armnetwork.LoadBalancerPropertiesFormat{
-// 			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{
-// 				fip,
-// 			},
-// 			BackendAddressPools: []*armnetwork.BackendAddressPool{
-// 				bp,
-// 			},
-// 			LoadBalancingRules: []*armnetwork.LoadBalancingRule{
-// 				{
-// 					Properties: &armnetwork.LoadBalancingRulePropertiesFormat{
-// 						FrontendIPConfiguration: &armnetwork.SubResource{
-// 							ID: fip.ID,
-// 						},
-// 						FrontendPort:     ptr.Of(int32(80)),
-// 						BackendPort:      ptr.Of(int32(80)),
-// 						EnableFloatingIP: ptr.Of(true),
-// 						Protocol:         ptr.Of(armnetwork.TransportProtocolTCP),
-// 						BackendAddressPool: &armnetwork.SubResource{
-// 							ID: bp.ID,
-// 						},
-// 					},
-// 				},
-// 			},
-// 		},
-// 	}
-// 	return out
-// }
-
-// func (r *Reconciler) writeGlobalLB(lb *armnetwork.LoadBalancer, rg string) error {
-// 	_, err := r.LBClient.CreateOrUpdate(context.Background(), rg, *lb.Name, *lb)
-// 	return err
-// }
+func NewNameKey(o v1.Object) NameKey {
+	return NameKey{
+		Named: krt.NewNamed(o),
+	}
+}
