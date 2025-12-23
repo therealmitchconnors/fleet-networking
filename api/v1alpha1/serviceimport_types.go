@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+// +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Namespaced,categories={fleet-networking},shortName=svcimport
 // +kubebuilder:subresource:status
