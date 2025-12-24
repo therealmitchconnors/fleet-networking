@@ -18,7 +18,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/trafficmanager/armtrafficmanager"
-	"istio.io/istio/pkg/kube"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -68,12 +67,10 @@ var (
 	cloudConfigFile = flag.String("cloud-config", "/etc/kubernetes/provider/azure.json", "The path to the cloud config file which will be used to access the Azure resource.")
 )
 
-var (
-	trafficManagerFeatureRequiredGVKs = []schema.GroupVersionKind{
-		fleetnetv1beta1.GroupVersion.WithKind(fleetnetv1beta1.TrafficManagerProfileKind),
-		fleetnetv1beta1.GroupVersion.WithKind(fleetnetv1beta1.TrafficManagerBackendKind),
-	}
-)
+var trafficManagerFeatureRequiredGVKs = []schema.GroupVersionKind{
+	fleetnetv1beta1.GroupVersion.WithKind(fleetnetv1beta1.TrafficManagerProfileKind),
+	fleetnetv1beta1.GroupVersion.WithKind(fleetnetv1beta1.TrafficManagerBackendKind),
+}
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -156,18 +153,14 @@ func main() {
 	// }
 
 	klog.V(1).InfoS("Start to setup GlobalService controller")
-	// clientCfg := kube.NewClientConfigForRestConfig(mgr.GetConfig())
-	// client, err := kube.NewClient(clientCfg, "")
-	client, err := apiclient.New(mgr.GetConfig())
 
+	client, err := apiclient.New(mgr.GetConfig())
 	if err != nil {
 		klog.ErrorS(err, "Unable to create GlobalService krt client")
 		exitWithErrorFunc()
 	}
 
-	// apiclient.RegisterTypes()
-	// registerTypes(client, mgr.GetClient())
-	kube.EnableCrdWatcher(client)
+	// kube.EnableCrdWatcher(client)
 	cloudConfig, err := azure.NewCloudConfigFromFile(*cloudConfigFile)
 	if err != nil {
 		klog.ErrorS(err, "Unable to load cloud config", "file name", *cloudConfigFile)
@@ -283,51 +276,6 @@ func structureWatcher(watcher watch.Interface, objType runtime.Object) watch.Int
 	}()
 	return result
 }
-
-// func registerTypes(kclient kube.Client, cc client.Client) {
-// 	gvrSE := v1beta1.GroupVersion.WithResource("serviceexports")
-// 	kubeclient.Register[*fleetnetv1beta1.ServiceExport](
-// 		gvrSE,
-// 		v1beta1.GroupVersion.WithKind("ServiceExport"),
-// 		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (runtime.Object, error) {
-// 			c.
-// 				out := &fleetnetv1beta1.ServiceExportList{}
-// 			err := cc.List(context.Background(), out, client.InNamespace(namespace))
-// 			if out.Continue == "continue-not-supported" {
-// 				out.Continue = ""
-// 			}
-// 			return out, err
-// 		},
-// 		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (watch.Interface, error) {
-// 			i, err := kclient.Dynamic().Resource(gvrSE).Namespace(namespace).Watch(context.Background(), o)
-// 			if err != nil {
-// 				return nil, err
-// 			}
-// 			newObj := &fleetnetv1beta1.ServiceExport{}
-// 			return structureWatcher(i, newObj), nil
-// 		})
-// 	gvrISE := v1alpha1.GroupVersion.WithResource("internalserviceexports")
-// 	kubeclient.Register[*fleetnetv1alpha1.InternalServiceExport](
-// 		gvrISE,
-// 		v1beta1.GroupVersion.WithKind("InternalServiceExport"),
-// 		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (runtime.Object, error) {
-// 			out := &fleetnetv1alpha1.InternalServiceExportList{}
-// 			err := cc.List(context.Background(), out, client.InNamespace(namespace))
-// 			if out.Continue == "continue-not-supported" {
-// 				out.Continue = ""
-// 			}
-// 			return out, err
-// 			// return kclient.Dynamic().Resource(gvrISE).Namespace(namespace).List(context.Background(), o)
-// 		},
-// 		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (watch.Interface, error) {
-// 			i, err := kclient.Dynamic().Resource(gvrISE).Namespace(namespace).Watch(context.Background(), o)
-// 			if err != nil {
-// 				return nil, err
-// 			}
-// 			newObj := &fleetnetv1alpha1.InternalServiceExport{}
-// 			return structureWatcher(i, newObj), nil
-// 		})
-// }
 
 // initAzureTrafficManagerClients initializes the Azure Traffic Manager profiles and endpoints clients.
 func initAzureTrafficManagerClients(cloudConfig *azure.CloudConfig) (*armtrafficmanager.ProfilesClient, *armtrafficmanager.EndpointsClient, error) {

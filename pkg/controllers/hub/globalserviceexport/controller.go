@@ -36,13 +36,15 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const globalAnnotation = "globalLBName"
-const targetGatewayAnnotation = "targetGateway"
+const (
+	globalAnnotation        = "globalLBName"
+	targetGatewayAnnotation = "targetGateway"
+)
 
 type parameters struct {
-	name          string
+	Name          string `json:"name"`
 	rg            string
-	backends      []string
+	Backends      []string `json:"backends"`
 	targetGateway string
 	serviceName   string
 	namespace     string
@@ -50,7 +52,7 @@ type parameters struct {
 
 // ResourceName implements krt.ResourceNamer.
 func (p parameters) ResourceName() string {
-	return fmt.Sprintf("%s.%s", p.rg, p.name)
+	return fmt.Sprintf("%s.%s", p.rg, p.Name)
 }
 
 type output struct {
@@ -64,8 +66,10 @@ func (p output) ResourceName() string {
 	return fmt.Sprintf("%s.%s", p.namespace, p.serviceName)
 }
 
-var _ krt.ResourceNamer = parameters{}
-var _ krt.ResourceNamer = output{}
+var (
+	_ krt.ResourceNamer = parameters{}
+	_ krt.ResourceNamer = output{}
+)
 
 type Reconciler struct {
 	client kube.Client
@@ -78,7 +82,8 @@ type Reconciler struct {
 func NewReconciler(c kube.Client, dc *armresources.DeploymentsClient, rc *armresources.Client, defaultRG string) *Reconciler {
 	ob := krtutil.NewKrtOptions(make(chan struct{}), new(krt.DebugHandler))
 
-	ses := krt.WrapClient(kclient.New[*v1beta1.ServiceExport](c), ob.ToOptions("serviceexports")...)
+	mclbs := krt.WrapClient(kclient.New[*v1alpha1.MultiClusterLoadBalancer](c), ob.ToOptions("multiclusterloadbalancers")...)
+	// ses := krt.WrapClient(kclient.New[*v1beta1.ServiceExport](c), ob.ToOptions("serviceexports")...)
 	ises := krt.WrapClient(kclient.New[*v1alpha1.InternalServiceExport](c), ob.ToOptions("internalserviceexports")...)
 	s, _ := v1beta1.SchemeBuilder.Build()
 	v1alpha1.SchemeBuilder.AddToScheme(s)
@@ -98,23 +103,19 @@ func NewReconciler(c kube.Client, dc *armresources.DeploymentsClient, rc *armres
 		}}
 	})
 
-	params := krt.NewCollection(ses, func(kctx krt.HandlerContext, export *v1beta1.ServiceExport) *parameters {
-		name, ok := export.Annotations[globalAnnotation]
-		if !ok {
-			return nil
-		}
-		targetGateway := export.Annotations[targetGatewayAnnotation]
-		internalServiceExports := krt.Fetch(kctx, ises, krt.FilterIndex(iseIndex, NewNameKey(export)))
-		rg := strings.TrimSpace(export.Annotations[objectmeta.ServiceAnnotationLoadBalancerResourceGroup])
+	params := krt.NewCollection(mclbs, func(kctx krt.HandlerContext, mclb *v1alpha1.MultiClusterLoadBalancer) *parameters {
+		targetGateway := mclb.Annotations[targetGatewayAnnotation]
+		internalServiceExports := krt.Fetch(kctx, ises, krt.FilterIndex(iseIndex, NewNameKey(mclb)))
+		rg := strings.TrimSpace(mclb.Annotations[objectmeta.ServiceAnnotationLoadBalancerResourceGroup])
 		if len(rg) < 1 {
 			rg = r.resourceGroupName
 		}
 		out := &parameters{
-			name:          name,
+			Name:          "name", // todo: generate unique name
 			rg:            rg,
 			targetGateway: targetGateway,
-			serviceName:   export.Name,
-			namespace:     export.Namespace,
+			serviceName:   mclb.Name,
+			namespace:     mclb.Namespace,
 		}
 		for _, ise := range internalServiceExports {
 			// for each public ip, get frontend config id
@@ -127,14 +128,14 @@ func NewReconciler(c kube.Client, dc *armresources.DeploymentsClient, rc *armres
 
 			ipConfig := pip.Properties.(map[string]interface{})["ipConfiguration"].(map[string]interface{})
 			cfgID, _ := ipConfig["id"].(string)
-			out.backends = append(out.backends, cfgID)
+			out.Backends = append(out.Backends, cfgID)
 		}
 		return out
 	})
 	outputs := krt.NewCollection(params, func(kctx krt.HandlerContext, param parameters) *output {
 		ipAddress, err := r.writeDeployment(param)
 		if err != nil {
-			klog.ErrorS(err, "Failed to deploy global service", "name", param.name)
+			klog.ErrorS(err, "Failed to deploy global service", "name", param.Name)
 			kctx.DiscardResult()
 		}
 		return &output{
@@ -143,6 +144,7 @@ func NewReconciler(c kube.Client, dc *armresources.DeploymentsClient, rc *armres
 			serviceName:           param.serviceName,
 			namespace:             param.namespace,
 		}
+		// TODO: write to status
 	})
 	krt.NewCollection(outputs, func(kctx krt.HandlerContext, out output) *string {
 		// annotate the service or gw with the global ip
@@ -174,11 +176,18 @@ func (r *Reconciler) writeDeployment(params parameters) (string, error) {
 	if err := json.Unmarshal([]byte(templateInline), &template); err != nil {
 		return "", err
 	}
-	p, err := r.deploymentClient.BeginCreateOrUpdate(context.Background(), params.rg, params.name, armresources.Deployment{
+	p, err := r.deploymentClient.BeginCreateOrUpdate(context.Background(), params.rg, params.Name, armresources.Deployment{
 		Properties: &armresources.DeploymentProperties{
-			Template:   template,
-			Parameters: params,
-			Mode:       ptr.Of(armresources.DeploymentModeIncremental),
+			Template: template,
+			Parameters: map[string]interface{}{
+				"name": map[string]string{
+					"value": params.Name,
+				},
+				"backends": map[string][]string{
+					"value": params.Backends,
+				},
+			},
+			Mode: ptr.Of(armresources.DeploymentModeIncremental),
 		},
 	}, nil)
 	if err != nil {

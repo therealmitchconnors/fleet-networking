@@ -65,7 +65,7 @@ require (
 	istio.io/client-go v1.28.0-alpha.0.0.20251126150310-56900da3b60f // indirect
 	k8s.io/apiserver v0.34.1 // indirect
 	sigs.k8s.io/gateway-api v1.4.0 // indirect
-	sigs.k8s.io/gateway-api-inference-extension v1.0.0 // indirect
+	sigs.k8s.io/gateway-api-inference-extension v0.0.0-20250926182816-0a3bb2010751 // indirect
 	sigs.k8s.io/mcs-api v0.2.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
@@ -125,7 +125,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onsi/ginkgo/v2 v2.25.1
+	github.com/onsi/ginkgo/v2 v2.25.3
 	github.com/onsi/gomega v1.38.2
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -167,7 +167,6 @@ require (
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.50
 	sigs.k8s.io/controller-runtime v0.22.1
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
