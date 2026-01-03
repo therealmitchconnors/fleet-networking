@@ -21,6 +21,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armdeployments"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 
 	"go.goms.io/fleet-networking/api/v1alpha1"
@@ -75,11 +76,11 @@ type Reconciler struct {
 	client kube.Client
 
 	resourceGroupName string // default resource group name to create public IP address
-	deploymentClient  *armresources.DeploymentsClient
+	deploymentClient  *armdeployments.DeploymentsClient
 	resourceClient    *armresources.Client
 }
 
-func NewReconciler(c kube.Client, dc *armresources.DeploymentsClient, rc *armresources.Client, defaultRG string) *Reconciler {
+func NewReconciler(c kube.Client, dc *armdeployments.DeploymentsClient, rc *armresources.Client, defaultRG string) *Reconciler {
 	ob := krtutil.NewKrtOptions(make(chan struct{}), new(krt.DebugHandler))
 
 	mclbs := krt.WrapClient(kclient.New[*v1alpha1.MultiClusterLoadBalancer](c), ob.ToOptions("multiclusterloadbalancers")...)
@@ -110,8 +111,12 @@ func NewReconciler(c kube.Client, dc *armresources.DeploymentsClient, rc *armres
 		if len(rg) < 1 {
 			rg = r.resourceGroupName
 		}
+		if mclb.DeletionTimestamp != nil {
+			// TODO handle delete
+			return nil
+		}
 		out := &parameters{
-			Name:          "name", // todo: generate unique name
+			Name:          mclb.Name, // todo: generate unique name
 			rg:            rg,
 			targetGateway: targetGateway,
 			serviceName:   mclb.Name,
@@ -163,6 +168,8 @@ func NewReconciler(c kube.Client, dc *armresources.DeploymentsClient, rc *armres
 		}
 		return nil
 	})
+
+	// TODO: handle delete and status
 	return r
 }
 
@@ -176,18 +183,18 @@ func (r *Reconciler) writeDeployment(params parameters) (string, error) {
 	if err := json.Unmarshal([]byte(templateInline), &template); err != nil {
 		return "", err
 	}
-	p, err := r.deploymentClient.BeginCreateOrUpdate(context.Background(), params.rg, params.Name, armresources.Deployment{
-		Properties: &armresources.DeploymentProperties{
+	p, err := r.deploymentClient.BeginCreateOrUpdate(context.Background(), params.rg, params.Name, armdeployments.Deployment{
+		Properties: &armdeployments.DeploymentProperties{
 			Template: template,
-			Parameters: map[string]interface{}{
-				"name": map[string]string{
-					"value": params.Name,
+			Parameters: map[string]*armdeployments.DeploymentParameter{
+				"name": {
+					Value: params.Name,
 				},
-				"backends": map[string][]string{
-					"value": params.Backends,
+				"backends": {
+					Value: params.Backends,
 				},
 			},
-			Mode: ptr.Of(armresources.DeploymentModeIncremental),
+			Mode: ptr.Of(armdeployments.DeploymentModeIncremental),
 		},
 	}, nil)
 	if err != nil {
@@ -200,7 +207,7 @@ func (r *Reconciler) writeDeployment(params parameters) (string, error) {
 	return ipAddress, err
 }
 
-// This is boilerplate we'd like to get rid of.
+// This is boilerplate we'd like to get rid of when istio 1.29 ships in Feb 26.
 type NameKey struct {
 	krt.Named
 }

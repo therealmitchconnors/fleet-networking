@@ -1,0 +1,8 @@
+{
+  "cloud": "AzurePublicCloud",
+  "subscriptionId": "40505a7f-3977-4414-9bf3-8804eef9adfb",
+  "useManagedIdentityExtension": true,
+  "userAssignedIdentityID": "f6e33c93-ebc9-4f0b-b4f2-f02858ce0cec",
+  "resourceGroup": "MC_fleet-e2e3_hub_eastus2",
+  "location": "eastus2"
+}
