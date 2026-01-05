@@ -21,25 +21,28 @@ import (
 	"log"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armdeployments"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armdeploymentstacks"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 
 	"go.goms.io/fleet-networking/api/v1alpha1"
-	"go.goms.io/fleet-networking/api/v1beta1"
+	"go.goms.io/fleet-networking/pkg/apiclient"
+	ac "go.goms.io/fleet-networking/pkg/applyconfigurations/api/v1alpha1"
 	"go.goms.io/fleet-networking/pkg/common/krtutil"
 	"go.goms.io/fleet-networking/pkg/common/objectmeta"
-	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	acv1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	"k8s.io/klog/v2"
 )
 
 const (
 	globalAnnotation        = "globalLBName"
 	targetGatewayAnnotation = "targetGateway"
+	fieldManagerName        = "globalserviceexport-controller"
 )
 
 type parameters struct {
@@ -73,21 +76,21 @@ var (
 )
 
 type Reconciler struct {
-	client kube.Client
+	client apiclient.Client
 
 	resourceGroupName string // default resource group name to create public IP address
-	deploymentClient  *armdeployments.DeploymentsClient
+	deploymentClient  *armdeploymentstacks.Client
 	resourceClient    *armresources.Client
 }
 
-func NewReconciler(c kube.Client, dc *armdeployments.DeploymentsClient, rc *armresources.Client, defaultRG string) *Reconciler {
+func NewReconciler(c apiclient.Client, dc *armdeploymentstacks.Client, rc *armresources.Client, defaultRG string) *Reconciler {
 	ob := krtutil.NewKrtOptions(make(chan struct{}), new(krt.DebugHandler))
 
 	mclbs := krt.WrapClient(kclient.New[*v1alpha1.MultiClusterLoadBalancer](c), ob.ToOptions("multiclusterloadbalancers")...)
 	// ses := krt.WrapClient(kclient.New[*v1beta1.ServiceExport](c), ob.ToOptions("serviceexports")...)
 	ises := krt.WrapClient(kclient.New[*v1alpha1.InternalServiceExport](c), ob.ToOptions("internalserviceexports")...)
-	s, _ := v1beta1.SchemeBuilder.Build()
-	v1alpha1.SchemeBuilder.AddToScheme(s)
+	// s, _ := v1beta1.SchemeBuilder.Build()
+	// v1alpha1.SchemeBuilder.AddToScheme(s)
 	r := &Reconciler{
 		client:            c,
 		resourceClient:    rc,
@@ -104,7 +107,7 @@ func NewReconciler(c kube.Client, dc *armdeployments.DeploymentsClient, rc *armr
 		}}
 	})
 
-	params := krt.NewCollection(mclbs, func(kctx krt.HandlerContext, mclb *v1alpha1.MultiClusterLoadBalancer) *parameters {
+	outputs := krt.NewCollection(mclbs, func(kctx krt.HandlerContext, mclb *v1alpha1.MultiClusterLoadBalancer) *output {
 		targetGateway := mclb.Annotations[targetGatewayAnnotation]
 		internalServiceExports := krt.Fetch(kctx, ises, krt.FilterIndex(iseIndex, NewNameKey(mclb)))
 		rg := strings.TrimSpace(mclb.Annotations[objectmeta.ServiceAnnotationLoadBalancerResourceGroup])
@@ -112,7 +115,18 @@ func NewReconciler(c kube.Client, dc *armdeployments.DeploymentsClient, rc *armr
 			rg = r.resourceGroupName
 		}
 		if mclb.DeletionTimestamp != nil {
-			// TODO handle delete
+			err := r.deleteDeployment(mclb.Name, rg)
+			if err != nil {
+				klog.ErrorS(err, "Failed to delete global service deployment", "name", mclb.Name, "namespace", mclb.Namespace)
+				kctx.DiscardResult()
+				return nil
+			}
+			// remove finalizer
+			r.RemoveFinalizer(mclb)
+			if err != nil {
+				klog.ErrorS(err, "Failed to remove mclb finalizer", "name", mclb.Name, "namespace", mclb.Namespace)
+				kctx.DiscardResult()
+			}
 			return nil
 		}
 		out := &parameters{
@@ -127,6 +141,9 @@ func NewReconciler(c kube.Client, dc *armdeployments.DeploymentsClient, rc *armr
 			pip, err := r.resourceClient.GetByID(context.Background(), *ise.Spec.PublicIPResourceID, "2024-10-01", &armresources.ClientGetByIDOptions{})
 			if err != nil {
 				klog.ErrorS(err, "No Public IP found for InternalServiceExport", "name", ise.Spec.ServiceReference.NamespacedName)
+				r.ApplyConditions(mclb, acv1.Condition().WithType("Valid").WithStatus(v1.ConditionFalse).
+					WithReason("PublicIPNotFound").WithMessage(
+					fmt.Sprintf("No Public IP found for InternalServiceExport %s", ise.Spec.ServiceReference.NamespacedName)))
 				kctx.DiscardResult()
 				return nil
 			}
@@ -135,19 +152,24 @@ func NewReconciler(c kube.Client, dc *armdeployments.DeploymentsClient, rc *armr
 			cfgID, _ := ipConfig["id"].(string)
 			out.Backends = append(out.Backends, cfgID)
 		}
-		return out
-	})
-	outputs := krt.NewCollection(params, func(kctx krt.HandlerContext, param parameters) *output {
-		ipAddress, err := r.writeDeployment(param)
+		r.ApplyConditions(mclb, acv1.Condition().WithType("Valid").WithStatus(v1.ConditionTrue))
+		// Add finalizer if not present
+		go r.ApplyFinalizer(mclb)
+
+		ipAddress, err := r.writeDeployment(*out)
 		if err != nil {
-			klog.ErrorS(err, "Failed to deploy global service", "name", param.Name)
+			klog.ErrorS(err, "Failed to deploy global service", "name", out.Name)
+			r.ApplyConditions(mclb, acv1.Condition().WithType("Deployed").WithStatus(v1.ConditionFalse).
+				WithReason("DeploymentFailed").WithMessage(
+				fmt.Sprintf("Failed to deploy global service %s", out.Name)))
 			kctx.DiscardResult()
 		}
+		r.ApplyConditions(mclb, acv1.Condition().WithType("Deployed").WithStatus(v1.ConditionTrue))
 		return &output{
 			publicGlobalIPAddress: ipAddress,
-			targetGateway:         param.targetGateway,
-			serviceName:           param.serviceName,
-			namespace:             param.namespace,
+			targetGateway:         out.targetGateway,
+			serviceName:           out.serviceName,
+			namespace:             out.namespace,
 		}
 		// TODO: write to status
 	})
@@ -168,8 +190,6 @@ func NewReconciler(c kube.Client, dc *armdeployments.DeploymentsClient, rc *armr
 		}
 		return nil
 	})
-
-	// TODO: handle delete and status
 	return r
 }
 
@@ -178,15 +198,39 @@ func (r *Reconciler) Start(ctx context.Context) error {
 	return nil
 }
 
+func (r *Reconciler) deleteDeployment(name, rg string) error {
+	p, err := r.deploymentClient.BeginDeleteAtResourceGroup(context.Background(), rg, name, nil)
+	if err != nil {
+		return err
+	}
+	_, err = p.PollUntilDone(context.Background(), nil)
+	if respErr, ok := err.(*azcore.ResponseError); ok {
+		if respErr.StatusCode == 404 {
+			// already deleted
+			return nil
+		}
+	}
+	return err
+}
+
 func (r *Reconciler) writeDeployment(params parameters) (string, error) {
 	template := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(templateInline), &template); err != nil {
 		return "", err
 	}
-	p, err := r.deploymentClient.BeginCreateOrUpdate(context.Background(), params.rg, params.Name, armdeployments.Deployment{
-		Properties: &armdeployments.DeploymentProperties{
+	foo := armdeploymentstacks.DenySettingsModeNone
+	p, err := r.deploymentClient.BeginCreateOrUpdateAtResourceGroup(context.Background(), params.rg, params.Name, armdeploymentstacks.DeploymentStack{
+		Properties: &armdeploymentstacks.DeploymentStackProperties{
+			ActionOnUnmanage: &armdeploymentstacks.ActionOnUnmanage{
+				Resources:        ptr.Of(armdeploymentstacks.DeploymentStacksDeleteDetachEnumDelete),
+				ResourceGroups:   ptr.Of(armdeploymentstacks.DeploymentStacksDeleteDetachEnumDetach),
+				ManagementGroups: ptr.Of(armdeploymentstacks.DeploymentStacksDeleteDetachEnumDetach),
+			},
+			DenySettings: &armdeploymentstacks.DenySettings{
+				Mode: &foo,
+			},
 			Template: template,
-			Parameters: map[string]*armdeployments.DeploymentParameter{
+			Parameters: map[string]*armdeploymentstacks.DeploymentParameter{
 				"name": {
 					Value: params.Name,
 				},
@@ -194,17 +238,58 @@ func (r *Reconciler) writeDeployment(params parameters) (string, error) {
 					Value: params.Backends,
 				},
 			},
-			Mode: ptr.Of(armdeployments.DeploymentModeIncremental),
 		},
 	}, nil)
 	if err != nil {
 		return "", err
 	}
 	res, err := p.PollUntilDone(context.Background(), nil)
-	log.Default().Println("Deployment result: ", res)
-	outputs := res.DeploymentExtended.Properties.Outputs.(map[string]interface{})
+	log.Default().Printf("Deployment result: %v\n", res)
+	outputs := res.DeploymentStack.Properties.Outputs.(map[string]interface{})
 	ipAddress := outputs["publicGlobalIPAddress"].(map[string]interface{})["value"].(string)
 	return ipAddress, err
+}
+
+func (r *Reconciler) RemoveFinalizer(mclb *v1alpha1.MultiClusterLoadBalancer) error {
+	_, err := r.client.Networking().ApiV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).Patch(
+		context.Background(), mclb.Name, types.JSONPatchType, []byte("[ { \"op\": \"remove\", \"path\": \"/metadata/finalizers/-\", \"value\": \"mclb\" } ]"),
+		v1.PatchOptions{},
+	)
+	if err != nil {
+		klog.ErrorS(err, "Failed to remove finalizer from MultiClusterLoadBalancer", "name", mclb.Name, "namespace", mclb.Namespace)
+	}
+	return err
+}
+
+func (r *Reconciler) ApplyFinalizer(mclb *v1alpha1.MultiClusterLoadBalancer) error {
+	x := ac.MultiClusterLoadBalancer(mclb.Name, mclb.Namespace).
+		WithFinalizers("mclb")
+	_, err := r.client.Networking().ApiV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).Apply(
+		context.Background(),
+		x,
+		v1.ApplyOptions{
+			FieldManager: fieldManagerName,
+		},
+	)
+	if err != nil {
+		klog.ErrorS(err, "Failed to apply finalizer to MultiClusterLoadBalancer", "name", mclb.Name, "namespace", mclb.Namespace)
+	}
+	return err
+}
+
+func (r *Reconciler) ApplyConditions(mclb *v1alpha1.MultiClusterLoadBalancer, conditions ...*acv1.ConditionApplyConfiguration) error {
+	for _, cond := range conditions {
+		cond.WithObservedGeneration(mclb.Generation)
+	}
+	_, err := r.client.Networking().ApiV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).ApplyStatus(context.Background(),
+		ac.MultiClusterLoadBalancer(mclb.Name, mclb.Namespace).WithStatus(
+			ac.MultiClusterLoadBalancerStatus().WithConditions(conditions...),
+		),
+		v1.ApplyOptions{
+			FieldManager: fieldManagerName,
+		},
+	)
+	return err
 }
 
 // This is boilerplate we'd like to get rid of when istio 1.29 ships in Feb 26.

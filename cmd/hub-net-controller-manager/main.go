@@ -16,7 +16,7 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armdeployments"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armdeploymentstacks"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/trafficmanager/armtrafficmanager"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -311,7 +311,7 @@ func initAzureTrafficManagerClients(cloudConfig *azure.CloudConfig) (*armtraffic
 }
 
 // initAzureTrafficManagerClients initializes the Azure Traffic Manager profiles and endpoints clients.
-func initAzureGlobalClients(cloudConfig *azure.CloudConfig) (*armresources.Client, *armdeployments.DeploymentsClient, error) {
+func initAzureGlobalClients(cloudConfig *azure.CloudConfig) (*armresources.Client, *armdeploymentstacks.Client, error) {
 	// TODO: this is needed to run in production, I think.  Not sure how to build multi-env auth...
 	// authProvider, err := azclient.NewAuthProvider(&cloudConfig.ARMClientConfig, &cloudConfig.AzureAuthConfig)
 	// if err != nil {
@@ -341,7 +341,7 @@ func initAzureGlobalClients(cloudConfig *azure.CloudConfig) (*armresources.Clien
 		return nil, nil, fmt.Errorf("failed to create Azure resource client: %w", err)
 	}
 
-	deploymentClient, err := armdeployments.NewDeploymentsClient(cloudConfig.SubscriptionID, cred, nil)
+	deploymentClient, err := armdeploymentstacks.NewClient(cloudConfig.SubscriptionID, cred, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Azure deploymentss client: %w", err)
 	}
