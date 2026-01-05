@@ -30,6 +30,10 @@ CLIENT_GEN_VER := v0.34.1
 CLIENT_GEN_BIN := client-gen
 CLIENT_GEN := $(abspath $(TOOLS_BIN_DIR)/$(CLIENT_GEN_BIN)-$(CLIENT_GEN_VER))
 
+AC_GEN_VER := v0.34.1
+AC_GEN_BIN := applyconfiguration-gen
+AC_GEN := $(abspath $(TOOLS_BIN_DIR)/$(AC_GEN_BIN)-$(AC_GEN_VER))
+
 STATICCHECK_VER := 2025.1.1
 STATICCHECK_BIN := staticcheck
 STATICCHECK := $(abspath $(TOOLS_BIN_DIR)/$(STATICCHECK_BIN)-$(STATICCHECK_VER))
@@ -65,6 +69,9 @@ $(CONTROLLER_GEN):
 
 $(CLIENT_GEN):
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) k8s.io/code-generator/cmd/client-gen $(CLIENT_GEN_BIN) $(CLIENT_GEN_VER)
+
+$(AC_GEN):
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) k8s.io/code-generator/cmd/applyconfiguration-gen $(AC_GEN_BIN) $(AC_GEN_VER)
 
 # Style checks
 $(STATICCHECK):
@@ -154,10 +161,17 @@ manifests: $(CONTROLLER_GEN)
 		$(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Generate code
-generate: $(CONTROLLER_GEN) $(CLIENT_GEN)
+generate: $(CONTROLLER_GEN) $(CLIENT_GEN) $(AC_GEN)
 	$(CONTROLLER_GEN) \
 		object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(AC_GEN) \
+		"go.goms.io/fleet-networking/api/v1alpha1" \
+		--output-pkg "go.goms.io/fleet-networking/pkg/applyconfigurations" \
+		--go-header-file "hack/boilerplate.go.txt" \
+		--output-dir "pkg/applyconfigurations" \
+		-v 5
 	$(CLIENT_GEN) \
+		--apply-configuration-package "go.goms.io/fleet-networking/pkg/applyconfigurations" \
 		--input-base "go.goms.io/fleet-networking/" \
 		--input "api/v1alpha1,api/v1beta1" \
 		--output-pkg "go.goms.io/fleet-networking/pkg/generated/clientset" \

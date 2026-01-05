@@ -8,19 +8,20 @@ package fake
 
 import (
 	v1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
-	apiv1alpha1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1alpha1"
+	apiv1alpha1 "go.goms.io/fleet-networking/pkg/applyconfigurations/api/v1alpha1"
+	typedapiv1alpha1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1alpha1"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeMultiClusterLoadBalancers implements MultiClusterLoadBalancerInterface
 type fakeMultiClusterLoadBalancers struct {
-	*gentype.FakeClientWithList[*v1alpha1.MultiClusterLoadBalancer, *v1alpha1.MultiClusterLoadBalancerList]
+	*gentype.FakeClientWithListAndApply[*v1alpha1.MultiClusterLoadBalancer, *v1alpha1.MultiClusterLoadBalancerList, *apiv1alpha1.MultiClusterLoadBalancerApplyConfiguration]
 	Fake *FakeApiV1alpha1
 }
 
-func newFakeMultiClusterLoadBalancers(fake *FakeApiV1alpha1, namespace string) apiv1alpha1.MultiClusterLoadBalancerInterface {
+func newFakeMultiClusterLoadBalancers(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.MultiClusterLoadBalancerInterface {
 	return &fakeMultiClusterLoadBalancers{
-		gentype.NewFakeClientWithList[*v1alpha1.MultiClusterLoadBalancer, *v1alpha1.MultiClusterLoadBalancerList](
+		gentype.NewFakeClientWithListAndApply[*v1alpha1.MultiClusterLoadBalancer, *v1alpha1.MultiClusterLoadBalancerList, *apiv1alpha1.MultiClusterLoadBalancerApplyConfiguration](
 			fake.Fake,
 			namespace,
 			v1alpha1.SchemeGroupVersion.WithResource("multiclusterloadbalancers"),

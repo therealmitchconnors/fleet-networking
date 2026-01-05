@@ -8,19 +8,20 @@ package fake
 
 import (
 	v1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
-	apiv1alpha1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1alpha1"
+	apiv1alpha1 "go.goms.io/fleet-networking/pkg/applyconfigurations/api/v1alpha1"
+	typedapiv1alpha1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1alpha1"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeInternalServiceImports implements InternalServiceImportInterface
 type fakeInternalServiceImports struct {
-	*gentype.FakeClientWithList[*v1alpha1.InternalServiceImport, *v1alpha1.InternalServiceImportList]
+	*gentype.FakeClientWithListAndApply[*v1alpha1.InternalServiceImport, *v1alpha1.InternalServiceImportList, *apiv1alpha1.InternalServiceImportApplyConfiguration]
 	Fake *FakeApiV1alpha1
 }
 
-func newFakeInternalServiceImports(fake *FakeApiV1alpha1, namespace string) apiv1alpha1.InternalServiceImportInterface {
+func newFakeInternalServiceImports(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.InternalServiceImportInterface {
 	return &fakeInternalServiceImports{
-		gentype.NewFakeClientWithList[*v1alpha1.InternalServiceImport, *v1alpha1.InternalServiceImportList](
+		gentype.NewFakeClientWithListAndApply[*v1alpha1.InternalServiceImport, *v1alpha1.InternalServiceImportList, *apiv1alpha1.InternalServiceImportApplyConfiguration](
 			fake.Fake,
 			namespace,
 			v1alpha1.SchemeGroupVersion.WithResource("internalserviceimports"),

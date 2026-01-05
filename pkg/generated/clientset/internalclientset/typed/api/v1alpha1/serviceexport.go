@@ -10,6 +10,7 @@ import (
 	context "context"
 
 	apiv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+	applyconfigurationsapiv1alpha1 "go.goms.io/fleet-networking/pkg/applyconfigurations/api/v1alpha1"
 	scheme "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,18 +36,21 @@ type ServiceExportInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*apiv1alpha1.ServiceExportList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *apiv1alpha1.ServiceExport, err error)
+	Apply(ctx context.Context, serviceExport *applyconfigurationsapiv1alpha1.ServiceExportApplyConfiguration, opts v1.ApplyOptions) (result *apiv1alpha1.ServiceExport, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, serviceExport *applyconfigurationsapiv1alpha1.ServiceExportApplyConfiguration, opts v1.ApplyOptions) (result *apiv1alpha1.ServiceExport, err error)
 	ServiceExportExpansion
 }
 
 // serviceExports implements ServiceExportInterface
 type serviceExports struct {
-	*gentype.ClientWithList[*apiv1alpha1.ServiceExport, *apiv1alpha1.ServiceExportList]
+	*gentype.ClientWithListAndApply[*apiv1alpha1.ServiceExport, *apiv1alpha1.ServiceExportList, *applyconfigurationsapiv1alpha1.ServiceExportApplyConfiguration]
 }
 
 // newServiceExports returns a ServiceExports
 func newServiceExports(c *ApiV1alpha1Client, namespace string) *serviceExports {
 	return &serviceExports{
-		gentype.NewClientWithList[*apiv1alpha1.ServiceExport, *apiv1alpha1.ServiceExportList](
+		gentype.NewClientWithListAndApply[*apiv1alpha1.ServiceExport, *apiv1alpha1.ServiceExportList, *applyconfigurationsapiv1alpha1.ServiceExportApplyConfiguration](
 			"serviceexports",
 			c.RESTClient(),
 			scheme.ParameterCodec,

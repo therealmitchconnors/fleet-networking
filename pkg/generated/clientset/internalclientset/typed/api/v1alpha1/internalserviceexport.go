@@ -10,6 +10,7 @@ import (
 	context "context"
 
 	apiv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+	applyconfigurationsapiv1alpha1 "go.goms.io/fleet-networking/pkg/applyconfigurations/api/v1alpha1"
 	scheme "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,18 +36,21 @@ type InternalServiceExportInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*apiv1alpha1.InternalServiceExportList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *apiv1alpha1.InternalServiceExport, err error)
+	Apply(ctx context.Context, internalServiceExport *applyconfigurationsapiv1alpha1.InternalServiceExportApplyConfiguration, opts v1.ApplyOptions) (result *apiv1alpha1.InternalServiceExport, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, internalServiceExport *applyconfigurationsapiv1alpha1.InternalServiceExportApplyConfiguration, opts v1.ApplyOptions) (result *apiv1alpha1.InternalServiceExport, err error)
 	InternalServiceExportExpansion
 }
 
 // internalServiceExports implements InternalServiceExportInterface
 type internalServiceExports struct {
-	*gentype.ClientWithList[*apiv1alpha1.InternalServiceExport, *apiv1alpha1.InternalServiceExportList]
+	*gentype.ClientWithListAndApply[*apiv1alpha1.InternalServiceExport, *apiv1alpha1.InternalServiceExportList, *applyconfigurationsapiv1alpha1.InternalServiceExportApplyConfiguration]
 }
 
 // newInternalServiceExports returns a InternalServiceExports
 func newInternalServiceExports(c *ApiV1alpha1Client, namespace string) *internalServiceExports {
 	return &internalServiceExports{
-		gentype.NewClientWithList[*apiv1alpha1.InternalServiceExport, *apiv1alpha1.InternalServiceExportList](
+		gentype.NewClientWithListAndApply[*apiv1alpha1.InternalServiceExport, *apiv1alpha1.InternalServiceExportList, *applyconfigurationsapiv1alpha1.InternalServiceExportApplyConfiguration](
 			"internalserviceexports",
 			c.RESTClient(),
 			scheme.ParameterCodec,

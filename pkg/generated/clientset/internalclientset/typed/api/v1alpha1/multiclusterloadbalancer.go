@@ -10,6 +10,7 @@ import (
 	context "context"
 
 	apiv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+	applyconfigurationsapiv1alpha1 "go.goms.io/fleet-networking/pkg/applyconfigurations/api/v1alpha1"
 	scheme "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -35,18 +36,21 @@ type MultiClusterLoadBalancerInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*apiv1alpha1.MultiClusterLoadBalancerList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *apiv1alpha1.MultiClusterLoadBalancer, err error)
+	Apply(ctx context.Context, multiClusterLoadBalancer *applyconfigurationsapiv1alpha1.MultiClusterLoadBalancerApplyConfiguration, opts v1.ApplyOptions) (result *apiv1alpha1.MultiClusterLoadBalancer, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, multiClusterLoadBalancer *applyconfigurationsapiv1alpha1.MultiClusterLoadBalancerApplyConfiguration, opts v1.ApplyOptions) (result *apiv1alpha1.MultiClusterLoadBalancer, err error)
 	MultiClusterLoadBalancerExpansion
 }
 
 // multiClusterLoadBalancers implements MultiClusterLoadBalancerInterface
 type multiClusterLoadBalancers struct {
-	*gentype.ClientWithList[*apiv1alpha1.MultiClusterLoadBalancer, *apiv1alpha1.MultiClusterLoadBalancerList]
+	*gentype.ClientWithListAndApply[*apiv1alpha1.MultiClusterLoadBalancer, *apiv1alpha1.MultiClusterLoadBalancerList, *applyconfigurationsapiv1alpha1.MultiClusterLoadBalancerApplyConfiguration]
 }
 
 // newMultiClusterLoadBalancers returns a MultiClusterLoadBalancers
 func newMultiClusterLoadBalancers(c *ApiV1alpha1Client, namespace string) *multiClusterLoadBalancers {
 	return &multiClusterLoadBalancers{
-		gentype.NewClientWithList[*apiv1alpha1.MultiClusterLoadBalancer, *apiv1alpha1.MultiClusterLoadBalancerList](
+		gentype.NewClientWithListAndApply[*apiv1alpha1.MultiClusterLoadBalancer, *apiv1alpha1.MultiClusterLoadBalancerList, *applyconfigurationsapiv1alpha1.MultiClusterLoadBalancerApplyConfiguration](
 			"multiclusterloadbalancers",
 			c.RESTClient(),
 			scheme.ParameterCodec,
