@@ -19,7 +19,7 @@ import (
 // apply configuration type exists for the given GroupVersionKind.
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
-	// Group=api, Version=v1alpha1
+	// Group=networking.fleet.azure.com, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithKind("ClusterStatus"):
 		return &apiv1alpha1.ClusterStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("ExportedObjectReference"):

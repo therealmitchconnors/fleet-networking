@@ -48,7 +48,7 @@ type serviceExports struct {
 }
 
 // newServiceExports returns a ServiceExports
-func newServiceExports(c *ApiV1beta1Client, namespace string) *serviceExports {
+func newServiceExports(c *NetworkingV1beta1Client, namespace string) *serviceExports {
 	return &serviceExports{
 		gentype.NewClientWithListAndApply[*apiv1beta1.ServiceExport, *apiv1beta1.ServiceExportList, *applyconfigurationsapiv1beta1.ServiceExportApplyConfiguration](
 			"serviceexports",

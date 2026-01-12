@@ -27,7 +27,7 @@ func ServiceExport(name, namespace string) *ServiceExportApplyConfiguration {
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("ServiceExport")
-	b.WithAPIVersion("api/v1alpha1")
+	b.WithAPIVersion("networking.fleet.azure.com/v1alpha1")
 	return b
 }
 func (b ServiceExportApplyConfiguration) IsApplyConfiguration() {}

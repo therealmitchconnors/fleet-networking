@@ -48,7 +48,7 @@ type serviceImports struct {
 }
 
 // newServiceImports returns a ServiceImports
-func newServiceImports(c *ApiV1alpha1Client, namespace string) *serviceImports {
+func newServiceImports(c *NetworkingV1alpha1Client, namespace string) *serviceImports {
 	return &serviceImports{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.ServiceImport, *apiv1alpha1.ServiceImportList, *applyconfigurationsapiv1alpha1.ServiceImportApplyConfiguration](
 			"serviceimports",

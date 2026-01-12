@@ -27,7 +27,7 @@ func MultiClusterLoadBalancer(name, namespace string) *MultiClusterLoadBalancerA
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("MultiClusterLoadBalancer")
-	b.WithAPIVersion("api/v1alpha1")
+	b.WithAPIVersion("networking.fleet.azure.com/v1alpha1")
 	return b
 }
 func (b MultiClusterLoadBalancerApplyConfiguration) IsApplyConfiguration() {}

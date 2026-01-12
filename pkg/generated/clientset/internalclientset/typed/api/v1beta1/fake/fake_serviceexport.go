@@ -16,10 +16,10 @@ import (
 // fakeServiceExports implements ServiceExportInterface
 type fakeServiceExports struct {
 	*gentype.FakeClientWithListAndApply[*v1beta1.ServiceExport, *v1beta1.ServiceExportList, *apiv1beta1.ServiceExportApplyConfiguration]
-	Fake *FakeApiV1beta1
+	Fake *FakeNetworkingV1beta1
 }
 
-func newFakeServiceExports(fake *FakeApiV1beta1, namespace string) typedapiv1beta1.ServiceExportInterface {
+func newFakeServiceExports(fake *FakeNetworkingV1beta1, namespace string) typedapiv1beta1.ServiceExportInterface {
 	return &fakeServiceExports{
 		gentype.NewFakeClientWithListAndApply[*v1beta1.ServiceExport, *v1beta1.ServiceExportList, *apiv1beta1.ServiceExportApplyConfiguration](
 			fake.Fake,

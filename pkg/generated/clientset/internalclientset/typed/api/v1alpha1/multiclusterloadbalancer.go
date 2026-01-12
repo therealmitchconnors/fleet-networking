@@ -48,7 +48,7 @@ type multiClusterLoadBalancers struct {
 }
 
 // newMultiClusterLoadBalancers returns a MultiClusterLoadBalancers
-func newMultiClusterLoadBalancers(c *ApiV1alpha1Client, namespace string) *multiClusterLoadBalancers {
+func newMultiClusterLoadBalancers(c *NetworkingV1alpha1Client, namespace string) *multiClusterLoadBalancers {
 	return &multiClusterLoadBalancers{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.MultiClusterLoadBalancer, *apiv1alpha1.MultiClusterLoadBalancerList, *applyconfigurationsapiv1alpha1.MultiClusterLoadBalancerApplyConfiguration](
 			"multiclusterloadbalancers",

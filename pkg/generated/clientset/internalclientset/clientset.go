@@ -10,8 +10,8 @@ import (
 	fmt "fmt"
 	http "net/http"
 
-	apiv1alpha1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1alpha1"
-	apiv1beta1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1beta1"
+	networkingv1alpha1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1alpha1"
+	networkingv1beta1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1beta1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -19,25 +19,25 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	ApiV1alpha1() apiv1alpha1.ApiV1alpha1Interface
-	ApiV1beta1() apiv1beta1.ApiV1beta1Interface
+	NetworkingV1alpha1() networkingv1alpha1.NetworkingV1alpha1Interface
+	NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface
 }
 
 // Clientset contains the clients for groups.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	apiV1alpha1 *apiv1alpha1.ApiV1alpha1Client
-	apiV1beta1  *apiv1beta1.ApiV1beta1Client
+	networkingV1alpha1 *networkingv1alpha1.NetworkingV1alpha1Client
+	networkingV1beta1  *networkingv1beta1.NetworkingV1beta1Client
 }
 
-// ApiV1alpha1 retrieves the ApiV1alpha1Client
-func (c *Clientset) ApiV1alpha1() apiv1alpha1.ApiV1alpha1Interface {
-	return c.apiV1alpha1
+// NetworkingV1alpha1 retrieves the NetworkingV1alpha1Client
+func (c *Clientset) NetworkingV1alpha1() networkingv1alpha1.NetworkingV1alpha1Interface {
+	return c.networkingV1alpha1
 }
 
-// ApiV1beta1 retrieves the ApiV1beta1Client
-func (c *Clientset) ApiV1beta1() apiv1beta1.ApiV1beta1Interface {
-	return c.apiV1beta1
+// NetworkingV1beta1 retrieves the NetworkingV1beta1Client
+func (c *Clientset) NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface {
+	return c.networkingV1beta1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -84,11 +84,11 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 
 	var cs Clientset
 	var err error
-	cs.apiV1alpha1, err = apiv1alpha1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	cs.networkingV1alpha1, err = networkingv1alpha1.NewForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
 		return nil, err
 	}
-	cs.apiV1beta1, err = apiv1beta1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	cs.networkingV1beta1, err = networkingv1beta1.NewForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -113,8 +113,8 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.apiV1alpha1 = apiv1alpha1.New(c)
-	cs.apiV1beta1 = apiv1beta1.New(c)
+	cs.networkingV1alpha1 = networkingv1alpha1.New(c)
+	cs.networkingV1beta1 = networkingv1beta1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

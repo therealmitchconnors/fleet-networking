@@ -48,7 +48,7 @@ type internalServiceExports struct {
 }
 
 // newInternalServiceExports returns a InternalServiceExports
-func newInternalServiceExports(c *ApiV1alpha1Client, namespace string) *internalServiceExports {
+func newInternalServiceExports(c *NetworkingV1alpha1Client, namespace string) *internalServiceExports {
 	return &internalServiceExports{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.InternalServiceExport, *apiv1alpha1.InternalServiceExportList, *applyconfigurationsapiv1alpha1.InternalServiceExportApplyConfiguration](
 			"internalserviceexports",

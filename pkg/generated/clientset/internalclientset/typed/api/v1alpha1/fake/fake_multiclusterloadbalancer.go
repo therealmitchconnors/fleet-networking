@@ -16,10 +16,10 @@ import (
 // fakeMultiClusterLoadBalancers implements MultiClusterLoadBalancerInterface
 type fakeMultiClusterLoadBalancers struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.MultiClusterLoadBalancer, *v1alpha1.MultiClusterLoadBalancerList, *apiv1alpha1.MultiClusterLoadBalancerApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeNetworkingV1alpha1
 }
 
-func newFakeMultiClusterLoadBalancers(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.MultiClusterLoadBalancerInterface {
+func newFakeMultiClusterLoadBalancers(fake *FakeNetworkingV1alpha1, namespace string) typedapiv1alpha1.MultiClusterLoadBalancerInterface {
 	return &fakeMultiClusterLoadBalancers{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.MultiClusterLoadBalancer, *v1alpha1.MultiClusterLoadBalancerList, *apiv1alpha1.MultiClusterLoadBalancerApplyConfiguration](
 			fake.Fake,

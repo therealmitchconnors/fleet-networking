@@ -165,6 +165,12 @@ generate: $(CONTROLLER_GEN) $(CLIENT_GEN) $(AC_GEN)
 	$(CONTROLLER_GEN) \
 		object:headerFile="hack/boilerplate.go.txt" paths="./..."
 	$(AC_GEN) \
+		"go.goms.io/fleet-networking/api/v1beta1" \
+		--output-pkg "go.goms.io/fleet-networking/pkg/applyconfigurations" \
+		--go-header-file "hack/boilerplate.go.txt" \
+		--output-dir "pkg/applyconfigurations" \
+		-v 5
+	$(AC_GEN) \
 		"go.goms.io/fleet-networking/api/v1alpha1" \
 		--output-pkg "go.goms.io/fleet-networking/pkg/applyconfigurations" \
 		--go-header-file "hack/boilerplate.go.txt" \

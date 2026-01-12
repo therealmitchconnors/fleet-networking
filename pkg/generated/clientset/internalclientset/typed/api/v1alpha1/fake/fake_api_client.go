@@ -12,33 +12,33 @@ import (
 	testing "k8s.io/client-go/testing"
 )
 
-type FakeApiV1alpha1 struct {
+type FakeNetworkingV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeApiV1alpha1) InternalServiceExports(namespace string) v1alpha1.InternalServiceExportInterface {
+func (c *FakeNetworkingV1alpha1) InternalServiceExports(namespace string) v1alpha1.InternalServiceExportInterface {
 	return newFakeInternalServiceExports(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) InternalServiceImports(namespace string) v1alpha1.InternalServiceImportInterface {
+func (c *FakeNetworkingV1alpha1) InternalServiceImports(namespace string) v1alpha1.InternalServiceImportInterface {
 	return newFakeInternalServiceImports(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) MultiClusterLoadBalancers(namespace string) v1alpha1.MultiClusterLoadBalancerInterface {
+func (c *FakeNetworkingV1alpha1) MultiClusterLoadBalancers(namespace string) v1alpha1.MultiClusterLoadBalancerInterface {
 	return newFakeMultiClusterLoadBalancers(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) ServiceExports(namespace string) v1alpha1.ServiceExportInterface {
+func (c *FakeNetworkingV1alpha1) ServiceExports(namespace string) v1alpha1.ServiceExportInterface {
 	return newFakeServiceExports(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) ServiceImports(namespace string) v1alpha1.ServiceImportInterface {
+func (c *FakeNetworkingV1alpha1) ServiceImports(namespace string) v1alpha1.ServiceImportInterface {
 	return newFakeServiceImports(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeApiV1alpha1) RESTClient() rest.Interface {
+func (c *FakeNetworkingV1alpha1) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }

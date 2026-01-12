@@ -28,7 +28,7 @@ func InternalServiceImport(name, namespace string) *InternalServiceImportApplyCo
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("InternalServiceImport")
-	b.WithAPIVersion("api/v1alpha1")
+	b.WithAPIVersion("networking.fleet.azure.com/v1alpha1")
 	return b
 }
 func (b InternalServiceImportApplyConfiguration) IsApplyConfiguration() {}

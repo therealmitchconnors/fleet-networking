@@ -14,24 +14,24 @@ import (
 	rest "k8s.io/client-go/rest"
 )
 
-type ApiV1beta1Interface interface {
+type NetworkingV1beta1Interface interface {
 	RESTClient() rest.Interface
 	ServiceExportsGetter
 }
 
-// ApiV1beta1Client is used to interact with features provided by the networking.fleet.azure.com group.
-type ApiV1beta1Client struct {
+// NetworkingV1beta1Client is used to interact with features provided by the networking.fleet.azure.com group.
+type NetworkingV1beta1Client struct {
 	restClient rest.Interface
 }
 
-func (c *ApiV1beta1Client) ServiceExports(namespace string) ServiceExportInterface {
+func (c *NetworkingV1beta1Client) ServiceExports(namespace string) ServiceExportInterface {
 	return newServiceExports(c, namespace)
 }
 
-// NewForConfig creates a new ApiV1beta1Client for the given config.
+// NewForConfig creates a new NetworkingV1beta1Client for the given config.
 // NewForConfig is equivalent to NewForConfigAndClient(c, httpClient),
 // where httpClient was generated with rest.HTTPClientFor(c).
-func NewForConfig(c *rest.Config) (*ApiV1beta1Client, error) {
+func NewForConfig(c *rest.Config) (*NetworkingV1beta1Client, error) {
 	config := *c
 	setConfigDefaults(&config)
 	httpClient, err := rest.HTTPClientFor(&config)
@@ -41,21 +41,21 @@ func NewForConfig(c *rest.Config) (*ApiV1beta1Client, error) {
 	return NewForConfigAndClient(&config, httpClient)
 }
 
-// NewForConfigAndClient creates a new ApiV1beta1Client for the given config and http client.
+// NewForConfigAndClient creates a new NetworkingV1beta1Client for the given config and http client.
 // Note the http client provided takes precedence over the configured transport values.
-func NewForConfigAndClient(c *rest.Config, h *http.Client) (*ApiV1beta1Client, error) {
+func NewForConfigAndClient(c *rest.Config, h *http.Client) (*NetworkingV1beta1Client, error) {
 	config := *c
 	setConfigDefaults(&config)
 	client, err := rest.RESTClientForConfigAndClient(&config, h)
 	if err != nil {
 		return nil, err
 	}
-	return &ApiV1beta1Client{client}, nil
+	return &NetworkingV1beta1Client{client}, nil
 }
 
-// NewForConfigOrDie creates a new ApiV1beta1Client for the given config and
+// NewForConfigOrDie creates a new NetworkingV1beta1Client for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *ApiV1beta1Client {
+func NewForConfigOrDie(c *rest.Config) *NetworkingV1beta1Client {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -63,9 +63,9 @@ func NewForConfigOrDie(c *rest.Config) *ApiV1beta1Client {
 	return client
 }
 
-// New creates a new ApiV1beta1Client for the given RESTClient.
-func New(c rest.Interface) *ApiV1beta1Client {
-	return &ApiV1beta1Client{c}
+// New creates a new NetworkingV1beta1Client for the given RESTClient.
+func New(c rest.Interface) *NetworkingV1beta1Client {
+	return &NetworkingV1beta1Client{c}
 }
 
 func setConfigDefaults(config *rest.Config) {
@@ -81,7 +81,7 @@ func setConfigDefaults(config *rest.Config) {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *ApiV1beta1Client) RESTClient() rest.Interface {
+func (c *NetworkingV1beta1Client) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}

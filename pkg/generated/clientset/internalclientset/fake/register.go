@@ -7,8 +7,8 @@ Licensed under the MIT license.
 package fake
 
 import (
-	apiv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
-	apiv1beta1 "go.goms.io/fleet-networking/api/v1beta1"
+	networkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+	networkingv1beta1 "go.goms.io/fleet-networking/api/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -20,8 +20,8 @@ var scheme = runtime.NewScheme()
 var codecs = serializer.NewCodecFactory(scheme)
 
 var localSchemeBuilder = runtime.SchemeBuilder{
-	apiv1alpha1.AddToScheme,
-	apiv1beta1.AddToScheme,
+	networkingv1alpha1.AddToScheme,
+	networkingv1beta1.AddToScheme,
 }
 
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition

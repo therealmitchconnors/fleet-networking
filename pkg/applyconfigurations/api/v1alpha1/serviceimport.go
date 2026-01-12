@@ -27,7 +27,7 @@ func ServiceImport(name, namespace string) *ServiceImportApplyConfiguration {
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("ServiceImport")
-	b.WithAPIVersion("api/v1alpha1")
+	b.WithAPIVersion("networking.fleet.azure.com/v1alpha1")
 	return b
 }
 func (b ServiceImportApplyConfiguration) IsApplyConfiguration() {}

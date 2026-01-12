@@ -48,7 +48,7 @@ type internalServiceImports struct {
 }
 
 // newInternalServiceImports returns a InternalServiceImports
-func newInternalServiceImports(c *ApiV1alpha1Client, namespace string) *internalServiceImports {
+func newInternalServiceImports(c *NetworkingV1alpha1Client, namespace string) *internalServiceImports {
 	return &internalServiceImports{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.InternalServiceImport, *apiv1alpha1.InternalServiceImportList, *applyconfigurationsapiv1alpha1.InternalServiceImportApplyConfiguration](
 			"internalserviceimports",

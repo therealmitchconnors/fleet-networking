@@ -9,10 +9,10 @@ package fake
 import (
 	applyconfigurations "go.goms.io/fleet-networking/pkg/applyconfigurations"
 	clientset "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset"
-	apiv1alpha1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1alpha1"
-	fakeapiv1alpha1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1alpha1/fake"
-	apiv1beta1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1beta1"
-	fakeapiv1beta1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1beta1/fake"
+	networkingv1alpha1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1alpha1"
+	fakenetworkingv1alpha1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1alpha1/fake"
+	networkingv1beta1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1beta1"
+	fakenetworkingv1beta1 "go.goms.io/fleet-networking/pkg/generated/clientset/internalclientset/typed/api/v1beta1/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -115,12 +115,12 @@ var (
 	_ testing.FakeClient  = &Clientset{}
 )
 
-// ApiV1alpha1 retrieves the ApiV1alpha1Client
-func (c *Clientset) ApiV1alpha1() apiv1alpha1.ApiV1alpha1Interface {
-	return &fakeapiv1alpha1.FakeApiV1alpha1{Fake: &c.Fake}
+// NetworkingV1alpha1 retrieves the NetworkingV1alpha1Client
+func (c *Clientset) NetworkingV1alpha1() networkingv1alpha1.NetworkingV1alpha1Interface {
+	return &fakenetworkingv1alpha1.FakeNetworkingV1alpha1{Fake: &c.Fake}
 }
 
-// ApiV1beta1 retrieves the ApiV1beta1Client
-func (c *Clientset) ApiV1beta1() apiv1beta1.ApiV1beta1Interface {
-	return &fakeapiv1beta1.FakeApiV1beta1{Fake: &c.Fake}
+// NetworkingV1beta1 retrieves the NetworkingV1beta1Client
+func (c *Clientset) NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface {
+	return &fakenetworkingv1beta1.FakeNetworkingV1beta1{Fake: &c.Fake}
 }

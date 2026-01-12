@@ -28,7 +28,7 @@ func InternalServiceExport(name, namespace string) *InternalServiceExportApplyCo
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("InternalServiceExport")
-	b.WithAPIVersion("api/v1alpha1")
+	b.WithAPIVersion("networking.fleet.azure.com/v1alpha1")
 	return b
 }
 func (b InternalServiceExportApplyConfiguration) IsApplyConfiguration() {}

@@ -16,10 +16,10 @@ import (
 // fakeInternalServiceImports implements InternalServiceImportInterface
 type fakeInternalServiceImports struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.InternalServiceImport, *v1alpha1.InternalServiceImportList, *apiv1alpha1.InternalServiceImportApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeNetworkingV1alpha1
 }
 
-func newFakeInternalServiceImports(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.InternalServiceImportInterface {
+func newFakeInternalServiceImports(fake *FakeNetworkingV1alpha1, namespace string) typedapiv1alpha1.InternalServiceImportInterface {
 	return &fakeInternalServiceImports{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.InternalServiceImport, *v1alpha1.InternalServiceImportList, *apiv1alpha1.InternalServiceImportApplyConfiguration](
 			fake.Fake,
