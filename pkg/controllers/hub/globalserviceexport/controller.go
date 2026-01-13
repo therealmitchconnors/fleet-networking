@@ -33,6 +33,7 @@ import (
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	acv1 "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -87,10 +88,7 @@ func NewReconciler(c apiclient.Client, dc *armdeploymentstacks.Client, rc *armre
 	ob := krtutil.NewKrtOptions(make(chan struct{}), new(krt.DebugHandler))
 
 	mclbs := krt.WrapClient(kclient.New[*v1alpha1.MultiClusterLoadBalancer](c), ob.ToOptions("multiclusterloadbalancers")...)
-	// ses := krt.WrapClient(kclient.New[*v1beta1.ServiceExport](c), ob.ToOptions("serviceexports")...)
 	ises := krt.WrapClient(kclient.New[*v1alpha1.InternalServiceExport](c), ob.ToOptions("internalserviceexports")...)
-	// s, _ := v1beta1.SchemeBuilder.Build()
-	// v1alpha1.SchemeBuilder.AddToScheme(s)
 	r := &Reconciler{
 		client:            c,
 		resourceClient:    rc,
@@ -130,7 +128,7 @@ func NewReconciler(c apiclient.Client, dc *armdeploymentstacks.Client, rc *armre
 			return nil
 		}
 		out := &parameters{
-			Name:          mclb.Name, // todo: generate unique name
+			Name:          fmt.Sprintf("%s-%s", mclb.Namespace, mclb.Name),
 			rg:            rg,
 			targetGateway: targetGateway,
 			serviceName:   mclb.Name,
@@ -141,9 +139,7 @@ func NewReconciler(c apiclient.Client, dc *armdeploymentstacks.Client, rc *armre
 			pip, err := r.resourceClient.GetByID(context.Background(), *ise.Spec.PublicIPResourceID, "2024-10-01", &armresources.ClientGetByIDOptions{})
 			if err != nil {
 				klog.ErrorS(err, "No Public IP found for InternalServiceExport", "name", ise.Spec.ServiceReference.NamespacedName)
-				r.ApplyConditions(mclb, acv1.Condition().WithType("Valid").WithStatus(v1.ConditionFalse).
-					WithReason("PublicIPNotFound").WithMessage(
-					fmt.Sprintf("No Public IP found for InternalServiceExport %s", ise.Spec.ServiceReference.NamespacedName)))
+				r.ApplyStatusInvalid(mclb, ise.Spec.ServiceReference.NamespacedName)
 				kctx.DiscardResult()
 				return nil
 			}
@@ -152,26 +148,26 @@ func NewReconciler(c apiclient.Client, dc *armdeploymentstacks.Client, rc *armre
 			cfgID, _ := ipConfig["id"].(string)
 			out.Backends = append(out.Backends, cfgID)
 		}
-		r.ApplyConditions(mclb, acv1.Condition().WithType("Valid").WithStatus(v1.ConditionTrue))
+		r.ApplyStatusValid(mclb)
 		// Add finalizer if not present
 		go r.ApplyFinalizer(mclb)
 
+		// TODO: this blocks for way too long, and needs to be factored out.
+		// TODO: this seems to run repeatedly, why?
 		ipAddress, err := r.writeDeployment(*out)
 		if err != nil {
-			klog.ErrorS(err, "Failed to deploy global service", "name", out.Name)
-			r.ApplyConditions(mclb, acv1.Condition().WithType("Deployed").WithStatus(v1.ConditionFalse).
-				WithReason("DeploymentFailed").WithMessage(
-				fmt.Sprintf("Failed to deploy global service %s", out.Name)))
+			klog.ErrorS(err, "Failed to deploy global load balancer", "name", out.Name)
+			r.ApplyStatusFailed(mclb)
+			// TODO: write event to mclb with error details
 			kctx.DiscardResult()
 		}
-		r.ApplyConditions(mclb, acv1.Condition().WithType("Deployed").WithStatus(v1.ConditionTrue))
+		go r.ApplyStatusDeployed(mclb, len(out.Backends), ipAddress)
 		return &output{
 			publicGlobalIPAddress: ipAddress,
 			targetGateway:         out.targetGateway,
 			serviceName:           out.serviceName,
 			namespace:             out.namespace,
 		}
-		// TODO: write to status
 	})
 	krt.NewCollection(outputs, func(kctx krt.HandlerContext, out output) *string {
 		// annotate the service or gw with the global ip
@@ -251,8 +247,19 @@ func (r *Reconciler) writeDeployment(params parameters) (string, error) {
 }
 
 func (r *Reconciler) RemoveFinalizer(mclb *v1alpha1.MultiClusterLoadBalancer) error {
-	_, err := r.client.Networking().ApiV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).Patch(
-		context.Background(), mclb.Name, types.JSONPatchType, []byte("[ { \"op\": \"remove\", \"path\": \"/metadata/finalizers/-\", \"value\": \"mclb\" } ]"),
+	index := -1
+	for i, f := range mclb.Finalizers {
+		if f == "mclb" {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		// finalizer not found
+		return nil
+	}
+	_, err := r.client.Networking().NetworkingV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).Patch(
+		context.Background(), mclb.Name, types.JSONPatchType, []byte(fmt.Sprintf("[ { \"op\": \"remove\", \"path\": \"/metadata/finalizers/%d\" } ]", index)),
 		v1.PatchOptions{},
 	)
 	if err != nil {
@@ -264,7 +271,7 @@ func (r *Reconciler) RemoveFinalizer(mclb *v1alpha1.MultiClusterLoadBalancer) er
 func (r *Reconciler) ApplyFinalizer(mclb *v1alpha1.MultiClusterLoadBalancer) error {
 	x := ac.MultiClusterLoadBalancer(mclb.Name, mclb.Namespace).
 		WithFinalizers("mclb")
-	_, err := r.client.Networking().ApiV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).Apply(
+	_, err := r.client.Networking().NetworkingV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).Apply(
 		context.Background(),
 		x,
 		v1.ApplyOptions{
@@ -277,19 +284,95 @@ func (r *Reconciler) ApplyFinalizer(mclb *v1alpha1.MultiClusterLoadBalancer) err
 	return err
 }
 
-func (r *Reconciler) ApplyConditions(mclb *v1alpha1.MultiClusterLoadBalancer, conditions ...*acv1.ConditionApplyConfiguration) error {
-	for _, cond := range conditions {
-		cond.WithObservedGeneration(mclb.Generation)
+func conditionExists(conditions []v1.Condition, condType string, status *v1.ConditionStatus) (v1.Condition, bool) {
+	for _, c := range conditions {
+		if c.Type == condType && string(c.Status) == string(*status) {
+			return c, true
+		}
 	}
-	_, err := r.client.Networking().ApiV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).ApplyStatus(context.Background(),
+	return v1.Condition{}, false
+}
+
+func (r *Reconciler) ApplyStatusDeployed(mclb *v1alpha1.MultiClusterLoadBalancer, i int, ipAddress string) {
+	statusAC := ac.MultiClusterLoadBalancerStatus().WithLoadBalancer(corev1.LoadBalancerStatus{
+		Ingress: []corev1.LoadBalancerIngress{
+			{
+				IP: ipAddress,
+			},
+		},
+	})
+	statusAC.WithConditions(processConditions(mclb.Status.Conditions, mclb.Generation, getValidCondition(), getDeployedCondition(i))...)
+	_, err := r.client.Networking().NetworkingV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).ApplyStatus(context.Background(),
 		ac.MultiClusterLoadBalancer(mclb.Name, mclb.Namespace).WithStatus(
-			ac.MultiClusterLoadBalancerStatus().WithConditions(conditions...),
+			statusAC,
 		),
 		v1.ApplyOptions{
 			FieldManager: fieldManagerName,
 		},
 	)
-	return err
+	if err != nil {
+		klog.ErrorS(err, "Failed to apply deployed status to MultiClusterLoadBalancer", "name", mclb.Name, "namespace", mclb.Namespace)
+	}
+}
+
+func (r *Reconciler) ApplyStatusFailed(mclb *v1alpha1.MultiClusterLoadBalancer) {
+	statusAC := ac.MultiClusterLoadBalancerStatus()
+	statusAC.WithConditions(processConditions(mclb.Status.Conditions, mclb.Generation, getInvalidCondition(mclb.Name), getDeploFailedCondition())...)
+	_, err := r.client.Networking().NetworkingV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).ApplyStatus(context.Background(),
+		ac.MultiClusterLoadBalancer(mclb.Name, mclb.Namespace).WithStatus(
+			statusAC,
+		),
+		v1.ApplyOptions{
+			FieldManager: fieldManagerName,
+		},
+	)
+	if err != nil {
+		klog.ErrorS(err, "Failed to apply failed status to MultiClusterLoadBalancer", "name", mclb.Name, "namespace", mclb.Namespace)
+	}
+}
+
+func (r *Reconciler) ApplyStatusInvalid(mclb *v1alpha1.MultiClusterLoadBalancer, seName string) {
+	statusAC := ac.MultiClusterLoadBalancerStatus()
+	statusAC.WithConditions(processConditions(mclb.Status.Conditions, mclb.Generation, getInvalidCondition(seName))...)
+	_, err := r.client.Networking().NetworkingV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).ApplyStatus(context.Background(),
+		ac.MultiClusterLoadBalancer(mclb.Name, mclb.Namespace).WithStatus(
+			statusAC,
+		),
+		v1.ApplyOptions{
+			FieldManager: fieldManagerName,
+		},
+	)
+	if err != nil {
+		klog.ErrorS(err, "Failed to apply invalid status to MultiClusterLoadBalancer", "name", mclb.Name, "namespace", mclb.Namespace)
+	}
+}
+
+func (r *Reconciler) ApplyStatusValid(mclb *v1alpha1.MultiClusterLoadBalancer) {
+	statusAC := ac.MultiClusterLoadBalancerStatus()
+	statusAC.WithConditions(processConditions(mclb.Status.Conditions, mclb.Generation, getValidCondition())...)
+	_, err := r.client.Networking().NetworkingV1alpha1().MultiClusterLoadBalancers(mclb.Namespace).ApplyStatus(context.Background(),
+		ac.MultiClusterLoadBalancer(mclb.Name, mclb.Namespace).WithStatus(
+			statusAC,
+		),
+		v1.ApplyOptions{
+			FieldManager: fieldManagerName,
+		},
+	)
+	if err != nil {
+		klog.ErrorS(err, "Failed to apply valid status to MultiClusterLoadBalancer", "name", mclb.Name, "namespace", mclb.Namespace)
+	}
+}
+
+func processConditions(existing []v1.Condition, generation int64, newConds ...*acv1.ConditionApplyConfiguration) []*acv1.ConditionApplyConfiguration {
+	for _, cond := range newConds {
+		cond.WithObservedGeneration(generation)
+		if prior, exists := conditionExists(existing, *cond.Type, cond.Status); !exists {
+			cond.WithLastTransitionTime(v1.Now())
+		} else {
+			cond.WithLastTransitionTime(prior.LastTransitionTime)
+		}
+	}
+	return newConds
 }
 
 // This is boilerplate we'd like to get rid of when istio 1.29 ships in Feb 26.
@@ -305,4 +388,25 @@ func NewNameKey(o v1.Object) NameKey {
 	return NameKey{
 		Named: krt.NewNamed(o),
 	}
+}
+
+func getValidCondition() *acv1.ConditionApplyConfiguration {
+	return acv1.Condition().WithType("Valid").WithStatus(v1.ConditionTrue).WithMessage("multicluster load balancer is valid.").WithReason("IsValid")
+}
+
+func getInvalidCondition(seName string) *acv1.ConditionApplyConfiguration {
+	return acv1.Condition().WithType("Valid").WithStatus(v1.ConditionFalse).
+		WithReason("PublicIPNotFound").WithMessage(
+		fmt.Sprintf("No Public IP found for InternalServiceExport %s", seName))
+}
+
+func getDeployedCondition(numBackends int) *acv1.ConditionApplyConfiguration {
+	return acv1.Condition().WithType("Deployed").WithStatus(v1.ConditionTrue).WithMessage(
+		fmt.Sprintf("multicluster load balancer deployed successfully with %d backends.", numBackends)).WithReason("DeploymentSucceeded")
+}
+
+func getDeploFailedCondition() *acv1.ConditionApplyConfiguration {
+	return acv1.Condition().WithType("Deployed").WithStatus(v1.ConditionFalse).
+		WithReason("DeploymentFailed").WithMessage(
+		"Failed to deploy global load balancer")
 }
