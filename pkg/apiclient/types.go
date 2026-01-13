@@ -23,13 +23,13 @@ func RegisterTypes() {
 		gvrSE,
 		fleetnetv1beta1.GroupVersion.WithKind("ServiceExport"),
 		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (runtime.Object, error) {
-			return c.(Client).Networking().ApiV1beta1().ServiceExports(namespace).List(context.Background(), o)
+			return c.(Client).Networking().NetworkingV1beta1().ServiceExports(namespace).List(context.Background(), o)
 		},
 		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (watch.Interface, error) {
-			return c.(Client).Networking().ApiV1beta1().ServiceExports(namespace).Watch(context.Background(), o)
+			return c.(Client).Networking().NetworkingV1beta1().ServiceExports(namespace).Watch(context.Background(), o)
 		},
 		func(c kubeclient.ClientGetter, namespace string) kubetypes.WriteAPI[*fleetnetv1beta1.ServiceExport] {
-			return c.(Client).Networking().ApiV1beta1().ServiceExports(namespace)
+			return c.(Client).Networking().NetworkingV1beta1().ServiceExports(namespace)
 		},
 	)
 
@@ -38,13 +38,13 @@ func RegisterTypes() {
 		gvrISE,
 		fleetnetv1alpha1.GroupVersion.WithKind("InternalServiceExport"),
 		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (runtime.Object, error) {
-			return c.(Client).Networking().ApiV1alpha1().InternalServiceExports(namespace).List(context.Background(), o)
+			return c.(Client).Networking().NetworkingV1alpha1().InternalServiceExports(namespace).List(context.Background(), o)
 		},
 		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (watch.Interface, error) {
-			return c.(Client).Networking().ApiV1alpha1().InternalServiceExports(namespace).Watch(context.Background(), o)
+			return c.(Client).Networking().NetworkingV1alpha1().InternalServiceExports(namespace).Watch(context.Background(), o)
 		},
 		func(c kubeclient.ClientGetter, namespace string) kubetypes.WriteAPI[*fleetnetv1alpha1.InternalServiceExport] {
-			return c.(Client).Networking().ApiV1alpha1().InternalServiceExports(namespace)
+			return c.(Client).Networking().NetworkingV1alpha1().InternalServiceExports(namespace)
 		},
 	)
 
@@ -53,13 +53,13 @@ func RegisterTypes() {
 		gvrMCLB,
 		fleetnetv1alpha1.GroupVersion.WithKind("MultiClusterLoadBalancer"),
 		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (runtime.Object, error) {
-			return c.(Client).Networking().ApiV1alpha1().MultiClusterLoadBalancers(namespace).List(context.Background(), o)
+			return c.(Client).Networking().NetworkingV1alpha1().MultiClusterLoadBalancers(namespace).List(context.Background(), o)
 		},
 		func(c kubeclient.ClientGetter, namespace string, o v1.ListOptions) (watch.Interface, error) {
-			return c.(Client).Networking().ApiV1alpha1().MultiClusterLoadBalancers(namespace).Watch(context.Background(), o)
+			return c.(Client).Networking().NetworkingV1alpha1().MultiClusterLoadBalancers(namespace).Watch(context.Background(), o)
 		},
 		func(c kubeclient.ClientGetter, namespace string) kubetypes.WriteAPI[*fleetnetv1alpha1.MultiClusterLoadBalancer] {
-			return c.(Client).Networking().ApiV1alpha1().MultiClusterLoadBalancers(namespace)
+			return c.(Client).Networking().NetworkingV1alpha1().MultiClusterLoadBalancers(namespace)
 		},
 	)
 }

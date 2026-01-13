@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -13,9 +14,9 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Namespaced,categories={fleet-networking},shortName=mclb
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:JSONPath=`.spec.serviceImport.name`,name="Service-Import",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.loadBalancer.ingress[0].ip`,name="External-IP",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=='Valid')].status`,name="Is-Valid",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=='Deployed')].status`,name="Is-Deployed",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
 // MultiClusterService is the Schema for creating north-south L4 load balancer to consume services across clusters.
@@ -33,6 +34,10 @@ type MultiClusterLoadBalancer struct {
 
 // MultiClusterLoadBalancerStatus contains the current status of an export.
 type MultiClusterLoadBalancerStatus struct {
+	// LoadBalancer contains the current status of the load-balancer,
+	// if one is present.
+	// +optional
+	LoadBalancer v1.LoadBalancerStatus `json:"loadBalancer,omitempty" protobuf:"bytes,1,opt,name=loadBalancer"`
 	// +optional
 	// +patchStrategy=merge
 	// +patchMergeKey=type
