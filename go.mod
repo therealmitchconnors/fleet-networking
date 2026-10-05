@@ -6,6 +6,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armdeploymentstacks v1.0.1
 	go.goms.io/fleet v0.14.0
 	istio.io/istio v0.0.0-20251201142120-783e855f1e67
+	sigs.k8s.io/gateway-api v1.4.0
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 )
 
@@ -67,7 +68,6 @@ require (
 	istio.io/client-go v1.28.0-alpha.0.0.20251126150310-56900da3b60f // indirect
 	k8s.io/apiserver v0.34.1 // indirect
 	k8s.io/metrics v0.25.2 // indirect
-	sigs.k8s.io/gateway-api v1.4.0 // indirect
 	sigs.k8s.io/gateway-api-inference-extension v0.0.0-20250926182816-0a3bb2010751 // indirect
 	sigs.k8s.io/mcs-api v0.2.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect

@@ -43,6 +43,7 @@ import (
 	fleetnetv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	fleetnetv1beta1 "go.goms.io/fleet-networking/api/v1beta1"
 	"go.goms.io/fleet-networking/pkg/apiclient"
+	"go.goms.io/fleet-networking/pkg/controllers/hub/afdgateway"
 	"go.goms.io/fleet-networking/pkg/controllers/hub/endpointsliceexport"
 	"go.goms.io/fleet-networking/pkg/controllers/hub/globalserviceexport"
 	"go.goms.io/fleet-networking/pkg/controllers/hub/internalserviceexport"
@@ -185,6 +186,10 @@ func main() {
 		klog.ErrorS(err, "Unable to add GlobalServiceExport controller to manager")
 		exitWithErrorFunc()
 	}
+
+	klog.V(1).InfoS("Start to setup AFD Gateway controller")
+	afdR := afdgateway.NewReconciler(client, dc, cloudConfig.ResourceGroup)
+	mgr.Add(afdR)
 
 	klog.V(1).InfoS("Start to setup InternalServiceImport controller")
 	if err := (&internalserviceimport.Reconciler{
