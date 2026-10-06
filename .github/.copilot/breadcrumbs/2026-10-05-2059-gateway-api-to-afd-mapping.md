@@ -148,6 +148,15 @@ dc, cloudConfig.ResourceGroup)`, reusing the existing `*armdeploymentstacks.Clie
   `cmd/hub-net-controller-manager/main.go` updated to construct and `mgr.Add` the new
   reconciler; `sigs.k8s.io/gateway-api` promoted from indirect to direct in `go.mod`
   (via `go mod tidy`).
+- Phase 3: added pure-function unit tests (`TestSanitizeAFDName`, `TestResourceNamers`,
+  `TestMatchingHostnames`, `TestServiceToOrigin` in `httproute_test.go`), raising coverage
+  from 13.3% to 22.1%.
+- Phase 4: added fake-client-backed tests (using istio's `kube.NewFakeClient`, mirroring
+  `globalserviceexport/controller_test.go`'s pattern) for every krt collection and the
+  `Reconciler` itself: `fakeclient_test.go` (shared infra), `gatewayclass_test.go`,
+  `gateway_test.go`, `referencegrant_test.go`, `httproute_collection_test.go`,
+  `aggregate_test.go`, `controller_test.go` (using `armdsfake.Server` for the Azure
+  deployment-stacks client). Coverage rose from 22.1% to 85.3%.
 
 ## Before/After Comparison
 
@@ -157,7 +166,8 @@ dc, cloudConfig.ResourceGroup)`, reusing the existing `*armdeploymentstacks.Clie
 - After: a new, independently buildable/testable controller translates Gateway API
   GatewayClass/Gateway/HTTPRoute/ReferenceGrant intent into Azure Front Door configuration
   via two ARM Deployment Stacks per Gateway. `go build ./...`, `go vet ./...`, and
-  `go test ./pkg/controllers/hub/afdgateway/...` all pass.
+  `go test ./pkg/controllers/hub/afdgateway/... -race` all pass, with 85.3% statement
+  coverage (up from 13.3% at the end of Phase 2).
 
 ## References
 
